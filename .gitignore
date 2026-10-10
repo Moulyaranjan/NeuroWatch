@@ -1,0 +1,26 @@
+
+# Python environment and cache
+.venv/
+__pycache__/
+*.py[cod]
+
+# Personal wearable and Google Fit data
+data/raw/
+data/processed/
+data/**/*.json
+data/**/*.csv
+data/**/*.xlsx
+
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Local logs
+*.log
+streamlit_log.txt
