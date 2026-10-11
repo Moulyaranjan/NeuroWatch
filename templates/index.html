@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#08111f" />
+    <meta name="description" content="Personalized movement monitoring with real-time sensor data and explainable research insights." />
+    <title>NeuroWatch — Your movement, understood.</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/static/css/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" id="sidebar">
+        <a class="brand" href="#home" aria-label="NeuroWatch home">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <path d="M7 27.5h8.2l4.2-12 7.1 20 5.1-13.1H41" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="24" cy="24" r="21" stroke="currentColor" stroke-opacity=".3"/>
+            </svg>
+          </span>
+          <span class="brand-copy"><strong>NeuroWatch</strong><small>Movement research</small></span>
+        </a>
+
+        <nav class="nav-panel" aria-label="Main navigation">
+          <span class="nav-label">PERSONAL</span>
+          <button class="nav-button active" data-target="home" data-title="Your movement, understood." data-subtitle="Personalized movement monitoring, grounded in your data.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7v10a1 1 0 0 1-1 1h-6v-7h-4v7H4a1 1 0 0 1-1-1z"/></svg><span>My Movement</span>
+          </button>
+          <button class="nav-button" data-target="timeline" data-title="Activity Timeline" data-subtitle="A clear view of recorded movement events.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><path d="M6 8v8m5-10h8m-8 6h8m-8 6h8"/></svg><span>Activity Timeline</span>
+          </button>
+          <button class="nav-button" data-target="progress" data-title="My Progress" data-subtitle="Patterns across the sessions your device has recorded.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 19V5m0 14h18M7 15l4-5 3 2 5-7"/></svg><span>My Progress</span>
+          </button>
+          <button class="nav-button" data-target="heart" data-title="Heart &amp; Sensors" data-subtitle="Current measurements and sensor availability.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.6c0 5-8.8 11-8.8 11s-8.8-6-8.8-11A4.6 4.6 0 0 1 12 6.4a4.6 4.6 0 0 1 8.8 2.2Z"/><path d="M3 12h4l2-4 3 8 2-4h7"/></svg><span>Heart &amp; Sensors</span>
+          </button>
+          <button class="nav-button" data-target="insights" data-title="Movement Insights" data-subtitle="Understand what the current data can—and cannot—tell you.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6m-5 3h4m-2-19a7 7 0 0 0-4 12.7c.6.4 1 1 1 1.7h6c0-.7.4-1.3 1-1.7A7 7 0 0 0 12 2Z"/></svg><span>Movement Insights</span>
+          </button>
+          <button class="nav-button" data-target="sessions" data-title="Sessions" data-subtitle="Review recorded sessions and export your data.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Sessions</span>
+          </button>
+          <span class="nav-label nav-label-spaced">RESEARCH</span>
+          <button class="nav-button" data-target="research" data-title="Research Lab" data-subtitle="Raw sensor signals, derived measurements, and packet diagnostics.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2v7.3L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9.3V2M8 2h8M7 16h10"/></svg><span>Research Lab</span>
+          </button>
+          <button class="nav-button" data-target="quality" data-title="Device &amp; Data Quality" data-subtitle="See what is connected, what is reporting, and what remains unknown.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6m-6 4h6m-6 4h3m8-9h2m-2 5h2"/></svg><span>Device &amp; Data Quality</span>
+          </button>
+          <button class="nav-button" data-target="about" data-title="Settings &amp; About" data-subtitle="About this research prototype and its data handling.">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5m0-8h.01"/></svg><span>Settings &amp; About</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-spacer"></div>
+        <div class="sidebar-status">
+          <span class="status-orbit" aria-hidden="true"><i></i></span>
+          <div><strong id="sidebar-device">Waiting for device</strong><small id="sidebar-source">No live sensor data</small></div>
+          <span class="state-dot" id="sidebar-dot"></span>
+        </div>
+        <p class="sidebar-foot">RESEARCH PROTOTYPE <span>·</span> NOT A MEDICAL DEVICE</p>
+      </aside>
+
+      <main class="main-content">
+        <header class="topbar">
+          <div class="mobile-brand">
+            <span class="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 48 48" fill="none"><path d="M7 27.5h8.2l4.2-12 7.1 20 5.1-13.1H41" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/><circle cx="24" cy="24" r="21" stroke="currentColor" stroke-opacity=".3"/></svg>
+            </span><strong>NeuroWatch</strong>
+          </div>
+          <div class="page-heading">
+            <p class="eyebrow">PERSONAL MOVEMENT MONITORING</p>
+            <h1 id="page-title">Your movement, understood.</h1>
+            <p class="page-subtitle" id="page-subtitle">Personalized movement monitoring, grounded in your data.</p>
+          </div>
+          <div class="topbar-actions">
+            <div class="connection-pill" id="connection-status" role="status" aria-live="polite">
+              <span class="state-dot" id="connection-dot"></span><span id="connection-label">Connecting</span>
+            </div>
+            <button class="button button-quiet" id="export-button" type="button" title="Export the recorded session data as CSV">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg><span>Export</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+        <section id="home" class="page-section active" aria-labelledby="page-title">
+          <div class="home-hero">
+            <article class="hero-card">
+              <div class="hero-content">
+                <div class="hero-kicker"><span class="live-pulse"></span><span id="hero-state">SESSION READY</span></div>
+                <h2 id="hero-title">A clearer picture<br />of how you move.</h2>
+                <p id="hero-summary">Start a session and connect your movement sensor. Your readings will appear here as they arrive.</p>
+                <div class="hero-actions">
+                  <button id="start-session" class="button button-primary" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span>Start session</span>
+                  </button>
+                  <button id="end-session" class="button button-secondary" type="button" disabled>
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg><span>End session</span>
+                  </button>
+                </div>
+                <div class="hero-footnote"><span class="hero-footnote-icon">i</span><span id="hero-note">No readings yet. This dashboard only displays data received from your device.</span></div>
+              </div>
+              <div class="hero-visual" aria-label="Decorative movement-inspired signal illustration">
+                <div class="visual-orbit orbit-one"></div><div class="visual-orbit orbit-two"></div><div class="visual-orbit orbit-three"></div>
+                <div class="visual-core"><span></span><span></span><span></span></div>
+                <svg class="hero-wave" viewBox="0 0 560 210" preserveAspectRatio="none" aria-hidden="true">
+                  <defs><linearGradient id="waveStroke" x1="0" x2="1"><stop offset="0" stop-color="#66e6d1" stop-opacity="0"/><stop offset=".45" stop-color="#66e6d1"/><stop offset="1" stop-color="#a891ff" stop-opacity=".25"/></linearGradient><linearGradient id="waveFill" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#66e6d1" stop-opacity=".18"/><stop offset="1" stop-color="#66e6d1" stop-opacity="0"/></linearGradient></defs>
+                  <path d="M0 127 C38 127 39 114 70 120 S111 146 143 120 S184 67 214 109 S249 171 281 122 S322 64 350 109 S385 160 415 120 S456 75 485 116 S523 144 560 103 V210 H0Z" fill="url(#waveFill)"/>
+                  <path d="M0 127 C38 127 39 114 70 120 S111 146 143 120 S184 67 214 109 S249 171 281 122 S322 64 350 109 S385 160 415 120 S456 75 485 116 S523 144 560 103" fill="none" stroke="url(#waveStroke)" stroke-width="2.5"/>
+                </svg>
+                <div class="visual-caption"><span class="caption-line"></span><span>Movement signal</span><span class="caption-muted">illustrative</span></div>
+              </div>
+            </article>
+            <aside class="hero-side">
+              <article class="side-card session-card">
+                <div class="card-topline"><span class="eyebrow">CURRENT SESSION</span><span class="session-indicator" id="session-indicator">READY</span></div>
+                <div class="session-duration" id="session-duration">—<small>elapsed</small></div>
+                <div class="session-divider"></div>
+                <div class="session-detail"><span>Latest packet</span><strong id="latest-packet">No data</strong></div>
+                <div class="session-detail"><span>Activity</span><strong id="activity-type">Not classified</strong></div>
+              </article>
+              <article class="side-card quality-summary">
+                <div class="quality-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.3c0 4.4 3.2 8.4 7.5 9.7 4.3-1.3 7.5-5.3 7.5-9.7V6L12 3Z"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></div>
+                <div class="quality-copy"><span>Measurement reliability</span><strong id="quality-summary">Waiting for data</strong><small id="quality-detail">A reading is needed to assess freshness.</small></div>
+                <button class="text-link" data-jump="quality" type="button" aria-label="View device and data quality">Details <span>→</span></button>
+              </article>
+            </aside>
+          </div>
+
+          <section class="metrics-row" aria-label="Current movement metrics">
+            <article class="metric-card metric-primary">
+              <div class="metric-heading"><span class="metric-icon icon-teal"><svg viewBox="0 0 24 24"><path d="M13 3 5 14h6l-1 7 9-12h-6l1-6Z"/></svg></span><span>Steps recorded</span><span class="metric-label">SESSION</span></div>
+              <div class="metric-value"><strong id="step-count">—</strong><span id="steps-caption">Waiting for a reading</span></div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-heading"><span class="metric-icon icon-aqua"><svg viewBox="0 0 24 24"><path d="M3 12h4l2.2-5 4.1 10 2.4-5H21"/></svg></span><span>Walking pace</span></div>
+              <div class="metric-value"><strong id="cadence">—</strong><span>steps / min</span></div>
+              <div class="metric-subtext" id="pace-caption">Measurement unavailable</div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-heading"><span class="metric-icon icon-violet"><svg viewBox="0 0 24 24"><path d="M20.8 8.6c0 5-8.8 11-8.8 11s-8.8-6-8.8-11A4.6 4.6 0 0 1 12 6.4a4.6 4.6 0 0 1 8.8 2.2Z"/></svg></span><span>Heart rate</span></div>
+              <div class="metric-value"><strong id="heart-rate">—</strong><span id="heart-unit">bpm</span></div>
+              <div class="metric-subtext" id="heart-caption">Optional sensor not reporting</div>
+            </article>
+            <article class="metric-card">
+              <div class="metric-heading"><span class="metric-icon icon-blue"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span>Active duration</span></div>
+              <div class="metric-value"><strong id="active-duration">—</strong><span id="duration-unit">elapsed</span></div>
+              <div class="metric-subtext" id="duration-caption">Start a session to begin</div>
+            </article>
+          </section>
+
+          <div class="home-lower">
+            <div class="home-main-column">
+              <article class="panel timeline-panel">
+                <div class="panel-header"><div><p class="eyebrow">SESSION ACTIVITY</p><h3>Movement timeline</h3></div><button class="icon-link" data-jump="timeline" type="button">View timeline <span>↗</span></button></div>
+                <div id="home-timeline" class="timeline-visual"></div>
+                <div class="timeline-legend" id="timeline-legend"></div>
+              </article>
+              <article class="panel trends-panel">
+                <div class="panel-header"><div><p class="eyebrow">YOUR PATTERNS</p><h3>Personal trend preview</h3></div><button class="icon-link" data-jump="progress" type="button">Explore progress <span>↗</span></button></div>
+                <div class="trend-preview">
+                  <div class="trend-copy"><span class="trend-tag"><i></i> RECORDED SESSIONS</span><strong id="trend-summary">A trend will appear as your device records sessions.</strong><small id="trend-detail">No historical chart is shown without multiple recorded values.</small></div>
+                  <div class="trend-chart-wrap"><canvas id="homeTrendChart" class="chart-canvas" aria-label="Steps by recorded session"></canvas><div id="home-trend-empty" class="chart-empty">Collect more readings<br />to see a pattern</div></div>
+                </div>
+              </article>
+            </div>
+            <div class="home-side-column">
+              <article class="panel insight-panel">
+                <div class="panel-header"><div><p class="eyebrow">EXPLAINABLE OBSERVATION</p><h3>Movement insight</h3></div><span class="quiet-badge">RESEARCH</span></div>
+                <div id="home-insight" class="insight-content"></div>
+                <button class="text-link" data-jump="insights" type="button">How this is calculated <span>→</span></button>
+              </article>
+              <article class="panel device-glance">
+                <div class="panel-header"><div><p class="eyebrow">DEVICE STATUS</p><h3>Connection overview</h3></div><button class="icon-link" data-jump="quality" type="button">Details <span>↗</span></button></div>
+                <div class="device-glance-row"><span class="device-small-icon">IMU</span><span class="device-glance-copy"><strong>Movement sensor</strong><small id="home-sensor-state">Waiting for readings</small></span><span class="state-dot" id="home-sensor-dot"></span></div>
+                <div class="device-glance-row"><span class="device-small-icon heart-device">HR</span><span class="device-glance-copy"><strong>Heart-rate sensor</strong><small id="home-heart-state">Not reporting</small></span><span class="state-dot state-muted" id="home-heart-dot"></span></div>
+                <div class="device-glance-row"><span class="device-small-icon server-device">API</span><span class="device-glance-copy"><strong>Backend</strong><small id="home-backend-state">Checking connection</small></span><span class="state-dot state-muted" id="home-backend-dot"></span></div>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <section id="timeline" class="page-section" aria-labelledby="page-title">
+          <article class="panel page-intro-card timeline-intro">
+            <div><span class="eyebrow">RECORDED EVENTS</span><h2>Movement, in context.</h2><p>Events below reflect timestamps and activity labels received from your sensor. Unclassified readings stay unclassified.</p></div>
+            <div class="intro-mark" aria-hidden="true"><svg viewBox="0 0 120 100"><path d="M4 54h22l10-26 19 49 13-34 12 21 11-10h25" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          </article>
+          <article class="panel full-panel">
+            <div class="panel-header"><div><p class="eyebrow">SESSION RANGE</p><h3>Activity timeline</h3></div><span class="quiet-badge" id="session-range">No session data</span></div>
+            <div id="activity-timeline" class="event-timeline"></div>
+            <div class="timeline-legend larger-legend" id="full-timeline-legend"></div>
+          </article>
+          <article class="panel explanation-panel"><span class="explanation-mark">i</span><p><strong>How to read this timeline</strong><br />Each marker is a received sensor packet, not a continuous activity segment. The API currently records a classification only when it is included with the packet.</p></article>
+        </section>
+
+        <section id="progress" class="page-section" aria-labelledby="page-title">
+          <div class="analytics-banner"><div><span class="eyebrow">REAL OBSERVATIONS ONLY</span><h2>Your patterns take shape over time.</h2><p>Charts appear only when enough values have actually been recorded.</p></div><div class="banner-orb" aria-hidden="true"><span></span><span></span><span></span></div></div>
+          <div class="analytics-grid">
+            <article class="panel chart-panel-wide"><div class="panel-header"><div><p class="eyebrow">STEP COUNT · PER PACKET</p><h3>Steps recorded over time</h3></div><span class="unit-badge">steps</span></div><div class="large-chart-wrap"><canvas id="stepsTrendChart" class="chart-canvas" aria-label="Steps recorded over time"></canvas><div id="steps-empty" class="chart-empty">More recorded sessions are needed to show a trend.</div></div><div class="chart-footer"><span id="steps-observation">No comparable records yet.</span><span id="steps-count-label">0 observations</span></div></article>
+            <article class="panel chart-panel-wide"><div class="panel-header"><div><p class="eyebrow">WALKING PACE · PER PACKET</p><h3>Walking pace over time</h3></div><span class="unit-badge">steps / min</span></div><div class="large-chart-wrap"><canvas id="paceTrendChart" class="chart-canvas" aria-label="Walking pace over time"></canvas><div id="pace-empty" class="chart-empty">Walking pace will appear when it is reported by your sensor.</div></div><div class="chart-footer"><span id="pace-observation">No pace values available.</span><span id="pace-count-label">0 observations</span></div></article>
+          </div>
+          <article class="panel baseline-comparison"><div class="panel-header"><div><p class="eyebrow">PERSONAL REFERENCE</p><h3>Difference from your usual pattern</h3></div><span class="quiet-badge">ROLLING REFERENCE</span></div><div id="baseline-overview" class="baseline-overview"></div><p class="panel-footnote">The current API computes an average across up to the 50 most recent sensor packets. This rolling reference is not a separately saved baseline session.</p></article>
+        </section>
+
+        <section id="heart" class="page-section" aria-labelledby="page-title">
+          <div class="heart-hero panel"><div class="heart-hero-copy"><span class="eyebrow">OPTIONAL SENSOR</span><h2 id="heart-page-value">Measurement unavailable</h2><p id="heart-page-copy">No valid heart-rate estimate has been received from a connected sensor.</p><div class="heart-meta"><span class="quiet-badge" id="heart-quality-badge">WAITING FOR DATA</span><span id="heart-last-seen">No recent reading</span></div></div><div class="heart-art" aria-hidden="true"><svg viewBox="0 0 220 140"><path d="M10 73h46l18-35 31 71 22-50 16 25h61" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg><div class="heart-glow"></div></div></div>
+          <div class="sensor-detail-grid">
+            <article class="panel sensor-detail-card"><span class="eyebrow">RECENT READING</span><strong id="heart-current">—</strong><span class="unit-label">beats per minute</span><p id="heart-recent-note">No valid reading received.</p></article>
+            <article class="panel sensor-detail-card"><span class="eyebrow">MEASUREMENT RELIABILITY</span><strong id="hr-quality">Unavailable</strong><span class="unit-label">based on available packet details</span><p id="hr-freshness">Freshness unavailable</p></article>
+            <article class="panel sensor-detail-card"><span class="eyebrow">SENSOR AVAILABILITY</span><strong id="heart-device-state">Not reporting</strong><span class="unit-label">MAX30102 / optional heart sensor</span><p id="heart-device-note">The backend has not received a valid heart-rate estimate.</p></article>
+          </div>
+          <article class="explanation-panel"><span class="explanation-mark">i</span><p>Heart-rate values are shown only when received in a live sensor packet. No clinical accuracy or oxygen saturation is inferred.</p></article>
+        </section>
+
+        <section id="insights" class="page-section" aria-labelledby="page-title">
+          <div class="insights-heading"><span class="eyebrow">TRANSPARENT BY DESIGN</span><h2>What the current data says.</h2><p>Observations are limited to the calculations currently implemented by the research prototype.</p></div>
+          <div id="insight-list" class="insight-stack"></div>
+          <article class="panel explanation-panel"><span class="explanation-mark">i</span><p><strong>Not a clinical risk score.</strong><br />Movement differences may reflect sensor placement, calibration, or normal variation. Review the underlying packet data before drawing conclusions.</p></article>
+        </section>
+
+        <section id="sessions" class="page-section" aria-labelledby="page-title">
+          <div class="session-page-header"><div><span class="eyebrow">YOUR RECORDINGS</span><h2>Session history</h2><p>Sessions are grouped from the IDs attached to actual sensor packets.</p></div><button id="sessions-export" class="button button-secondary" type="button"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 17v3h16v-3"/></svg>Export CSV</button></div>
+          <div class="session-summary-strip"><div><span>Recorded sessions</span><strong id="session-count">0</strong></div><div><span>Valid sensor packets</span><strong id="packet-count">0</strong></div><div><span>Latest recording</span><strong id="sessions-last-seen">No data</strong></div></div>
+          <div id="session-history" class="session-list"></div>
+        </section>
+
+        <section id="research" class="page-section research-page" aria-labelledby="page-title">
+          <div class="research-banner"><div><span class="lab-mark"><svg viewBox="0 0 24 24"><path d="M10 2v7.3L4.5 19a2 2 0 0 0 1.8 3h11.4a2 2 0 0 0 1.8-3L14 9.3V2M8 2h8"/></svg></span><div><span class="eyebrow">ADVANCED VIEW</span><h2>Research Lab</h2></div></div><div class="research-banner-right"><span class="lab-state"><i></i><span id="research-live-state">AWAITING SENSOR DATA</span></span><button class="button button-secondary" id="research-export" type="button">Export session data</button></div></div>
+          <p class="research-intro">Raw measurements are supplied by the device; derived values below are calculated in the browser for inspection. Model outputs are displayed only when provided by the backend.</p>
+          <div class="research-charts-grid">
+            <article class="lab-panel lab-chart-large"><div class="lab-panel-header"><div><span class="eyebrow">RAW SENSOR SIGNAL</span><h3>Acceleration</h3><p>Linear acceleration on three axes</p></div><span class="unit-badge">m/s²</span></div><div class="lab-chart-wrap"><canvas id="accelChart" class="chart-canvas" aria-label="Acceleration X Y and Z"></canvas><div id="accel-empty" class="chart-empty">Waiting for IMU samples</div></div><div class="chart-legend"><span><i class="legend-x"></i>X axis</span><span><i class="legend-y"></i>Y axis</span><span><i class="legend-z"></i>Z axis</span></div></article>
+            <article class="lab-panel lab-chart-large"><div class="lab-panel-header"><div><span class="eyebrow">RAW SENSOR SIGNAL</span><h3>Turning and rotation</h3><p>Angular velocity on three axes</p></div><span class="unit-badge">deg/s</span></div><div class="lab-chart-wrap"><canvas id="gyroChart" class="chart-canvas" aria-label="Angular velocity X Y and Z"></canvas><div id="gyro-empty" class="chart-empty">Waiting for IMU samples</div></div><div class="chart-legend"><span><i class="legend-violet"></i>X axis</span><span><i class="legend-blue"></i>Y axis</span><span><i class="legend-aqua"></i>Z axis</span></div></article>
+          </div>
+          <div class="research-lower-grid">
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">DERIVED SIGNAL</span><h3>Acceleration magnitude</h3><p title="Euclidean norm calculated from the three acceleration axes.">√(ax² + ay² + az²)</p></div><span class="unit-badge">m/s²</span></div><div class="lab-chart-wrap magnitude-wrap"><canvas id="magnitudeChart" class="chart-canvas" aria-label="Acceleration magnitude"></canvas><div id="magnitude-empty" class="chart-empty">No acceleration samples available</div></div></article>
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">LATEST PACKET</span><h3>Sensor values</h3><p>Raw packet values with declared units</p></div></div><div id="research-values" class="research-values"></div></article>
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">PACKET DIAGNOSTICS</span><h3>Sequence &amp; freshness</h3><p>Packet timing and monotonic sequence data</p></div></div><div id="packet-diagnostics" class="diagnostic-list"></div></article>
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">MODEL OUTPUTS</span><h3>Reported features</h3><p>Activity labels and steps supplied by the sensor</p></div></div><div id="model-output" class="diagnostic-list"></div></article>
+          </div>
+          <article class="lab-panel baseline-lab"><div class="lab-panel-header"><div><span class="eyebrow">ROLLING REFERENCE</span><h3>Baseline &amp; difference analysis</h3><p>Backend mean over up to 50 recent packets; not an independent baseline session.</p></div><span class="unit-badge">per axis</span></div><div id="research-baseline" class="baseline-axis-grid"></div></article>
+          <p class="research-disclaimer">Research prototype measurements are not medically validated. Sampling frequency is not available in the current payload and is therefore not estimated.</p>
+        </section>
+
+        <section id="quality" class="page-section" aria-labelledby="page-title">
+          <div class="quality-page-lead"><span class="eyebrow">CONNECTION &amp; DATA INTEGRITY</span><h2>Know what is connected.</h2><p>Device state is based on the latest evidence received—not the server being online.</p></div>
+          <div class="device-grid" id="device-grid"></div>
+          <article class="panel quality-latest-panel"><div class="panel-header"><div><span class="eyebrow">LATEST DATA CHECK</span><h3>Measurement reliability</h3></div><span class="quiet-badge" id="quality-source-badge">NO DATA</span></div><div id="quality-diagnostics" class="quality-diagnostics"></div></article>
+        </section>
+
+        <section id="about" class="page-section" aria-labelledby="page-title">
+          <div class="about-hero panel"><span class="eyebrow">ABOUT THE PROJECT</span><h2>Research that stays grounded in real movement data.</h2><p>NeuroWatch explores personalized movement monitoring and explainable drift analysis using wearable and inertial sensor data.</p><div class="about-badges"><span>Experimental research prototype</span><span>Live sensor data only</span><span>Not a medical device</span></div></div>
+          <div class="about-grid"><article class="panel"><span class="eyebrow">DATA PRIVACY</span><h3>Your data stays local</h3><p>Sensor recordings and personal datasets are handled by the local application. Do not commit private exports or device credentials to source control.</p></article><article class="panel"><span class="eyebrow">CURRENT CAPABILITIES</span><h3>Evidence before interpretation</h3><p>Live IMU payloads, session controls, CSV export, rolling feature means, and dashboard updates are provided by the existing API. Missing sensors and unavailable features remain clearly marked.</p></article></div>
+          <article class="explanation-panel"><span class="explanation-mark">i</span><p>NeuroWatch is not a medical diagnostic system. No diagnosis, clinical accuracy claim, or health advice is provided.</p></article>
+        </section>
+
+        <footer class="app-footer"><span>NEUROWATCH <span class="footer-dot">·</span> PERSONAL MOVEMENT RESEARCH</span><span>Experimental prototype. Not a medical device.</span></footer>
+      </main>
+    </div>
+    <script src="/static/js/app.js"></script>
+  </body>
+</html>

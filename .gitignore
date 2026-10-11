@@ -3,6 +3,7 @@
 .venv/
 __pycache__/
 *.py[cod]
+.venv311/
 
 # Personal wearable and Google Fit data
 data/raw/
@@ -15,6 +16,7 @@ data/**/*.xlsx
 .env
 .env.*
 !.env.example
+firmware/esp32_neurowatch/arduino_secrets.h
 
 # Editor and operating-system files
 .vscode/
