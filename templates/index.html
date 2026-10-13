@@ -244,6 +244,11 @@
             <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">MODEL OUTPUTS</span><h3>Reported features</h3><p>Activity labels and steps supplied by the sensor</p></div></div><div id="model-output" class="diagnostic-list"></div></article>
           </div>
           <article class="lab-panel baseline-lab"><div class="lab-panel-header"><div><span class="eyebrow">ROLLING REFERENCE</span><h3>Baseline &amp; difference analysis</h3><p>Backend mean over up to 50 recent packets; not an independent baseline session.</p></div><span class="unit-badge">per axis</span></div><div id="research-baseline" class="baseline-axis-grid"></div></article>
+          <div class="research-lower-grid">
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">SIGNAL QUALITY</span><h3>Packet integrity</h3><p>Missing packets, timing irregularity, clipping, flatlines, and noisy windows.</p></div></div><div id="signal-quality-panel" class="diagnostic-list"></div></article>
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">MOVEMENT INTELLIGENCE</span><h3>Q-Change</h3><p>Quality-aware movement-change scoring with explicit persistence and evidence weighting.</p></div></div><div id="movement-intelligence-panel" class="diagnostic-list"></div></article>
+            <article class="lab-panel"><div class="lab-panel-header"><div><span class="eyebrow">RESEARCH COMPARISON</span><h3>Detector bench</h3><p>Baseline detector, CUSUM, and Q-Change comparison only when valid labels are available.</p></div></div><div id="research-comparison-panel" class="diagnostic-list"></div></article>
+          </div>
           <p class="research-disclaimer">Research prototype measurements are not medically validated. Sampling frequency is not available in the current payload and is therefore not estimated.</p>
         </section>
 

@@ -4,7 +4,18 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from fastapi.testclient import TestClient
 
-from main import SensorPayload, app, export_session, health, ingest_sensor, store
+from main import (
+    SensorPayload,
+    app,
+    build_dashboard_payload,
+    compute_q_change,
+    evaluate_research_metrics,
+    evaluate_signal_quality,
+    export_session,
+    health,
+    ingest_sensor,
+    store,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -82,6 +93,43 @@ def test_dashboard_websocket_updates_with_real_data():
             updated = websocket.receive_json()
             assert updated["sensor_state"] == "real_data"
             assert updated["step_count"] == 0
+
+
+def test_dashboard_payload_contains_research_sections():
+    payload = build_dashboard_payload()
+    assert payload["signal_quality"]["status"] == "insufficient_data"
+    assert payload["movement_intelligence"]["available"] is False
+    assert payload["research_metrics"]["available"] is False
+
+
+def test_signal_quality_handles_missing_metadata_gracefully():
+    history = [
+        {"timestamp": "2026-10-11T00:00:00Z", "values": {"ax": 0.11, "ay": 0.12, "az": 0.98, "gx": 1.0, "gy": 1.2, "gz": 0.8}},
+        {"timestamp": "2026-10-11T00:00:01Z", "values": {"ax": 0.14, "ay": 0.15, "az": 1.02, "gx": 1.1, "gy": 1.4, "gz": 0.7}},
+    ]
+    quality = evaluate_signal_quality(history)
+    assert quality["status"] in {"good", "warning", "unknown", "insufficient_data"}
+    assert quality["metrics"]["timestamp_gap_ms"] is not None
+
+
+def test_q_change_returns_uncertain_when_quality_is_low():
+    history = [
+        {"timestamp": "2026-10-11T00:00:00Z", "values": {"ax": 0.1, "ay": 0.1, "az": 0.9, "gx": 1.0, "gy": 1.0, "gz": 0.9}},
+        {"timestamp": "2026-10-11T00:00:01Z", "values": {"ax": 0.1, "ay": 0.1, "az": 0.9, "gx": 1.0, "gy": 1.0, "gz": 0.9}},
+        {"timestamp": "2026-10-11T00:00:02Z", "values": {"ax": 0.1, "ay": 0.1, "az": 0.9, "gx": 1.0, "gy": 1.0, "gz": 0.9}},
+    ]
+    result = compute_q_change(history, {"quality_score": 0.2, "status": "poor"})
+    assert result["state"] in {"uncertain", "normal"}
+    assert result["signal_quality_status"] == "poor"
+
+
+def test_research_metrics_require_ground_truth_annotations():
+    history = [
+        {"timestamp": "2026-10-11T00:00:00Z", "activity": "walking", "values": {"ax": 0.1, "ay": 0.1, "az": 0.9, "gx": 1.0, "gy": 1.0, "gz": 0.9}},
+    ]
+    metrics = evaluate_research_metrics(history)
+    assert metrics["available"] is True
+    assert metrics["metrics"]["precision"] is None
 
 
 def test_session_export_endpoint():

@@ -2,6 +2,9 @@ const state = {
   history: [],
   baseline: null,
   alerts: [],
+  signalQuality: null,
+  movementIntelligence: null,
+  researchMetrics: null,
   backendConnected: false,
   socketConnected: false,
   sessionStartedAt: null,
@@ -672,6 +675,46 @@ function renderResearch(latest) {
     const difference = baselineValue !== null && latestValue !== null ? latestValue - baselineValue : null;
     return `<div class="baseline-axis" title="Rolling per-axis arithmetic mean across up to 50 recent sensor packets."><span>${escapeHtml(label)} · mean</span><strong>${baselineValue === null ? 'Unavailable' : formatNumber(baselineValue, 3)}</strong><small>${escapeHtml(unit)} · latest − mean: ${difference === null ? 'n/a' : `${difference >= 0 ? '+' : ''}${formatNumber(difference, 3)}`}</small></div>`;
   }).join('');
+
+  const signalQuality = state.signalQuality || { available: false, status: 'insufficient_data', summary: 'No signal-quality assessment is available.', quality_score: 0.0, metrics: {} };
+  const intelligence = state.movementIntelligence || { available: false, state: 'uncertain', score: null, reference_deviation: null, signal_quality_status: 'insufficient_data', summary: 'Q-Change is not active until enough packets are available.' };
+  const comparison = state.researchMetrics || { available: false, summary: 'Research comparison is unavailable because labels or evaluation intervals are missing.' };
+  const signalMetrics = signalQuality.metrics || {};
+  const signalRows = [
+    ['Status', String(signalQuality.status || 'unknown').toUpperCase()],
+    ['Quality score', signalQuality.quality_score == null ? 'Unavailable' : `${Number(signalQuality.quality_score).toFixed(2)}/1.00`],
+    ['Missing packets', signalMetrics.missing_packets == null ? 'Unknown' : String(signalMetrics.missing_packets)],
+    ['Sequence gaps', signalMetrics.sequence_gaps == null ? 'Unknown' : String(signalMetrics.sequence_gaps)],
+    ['Timestamp irregularity', signalMetrics.timestamp_irregularity_ms == null ? 'Unknown' : `${signalMetrics.timestamp_irregularity_ms} ms`],
+    ['Saturation events', signalMetrics.saturation_events == null ? 'Unknown' : String(signalMetrics.saturation_events)],
+    ['Flatlined windows', signalMetrics.flatlined_windows == null ? 'Unknown' : String(signalMetrics.flatlined_windows)],
+    ['Noise windows', signalMetrics.noise_windows == null ? 'Unknown' : String(signalMetrics.noise_windows)],
+  ];
+  el('signal-quality-panel').innerHTML = signalRows.map(([label, value]) => diagnosticRow(label, value)).join('') + `<div class="quality-diagnostic"><span>Assessment</span><strong>${escapeHtml(signalQuality.summary || 'Unavailable')}</strong><p>${escapeHtml(signalQuality.summary || 'Unable to assess signal quality.')}</p></div>`;
+
+  const intelligenceRows = [
+    ['State', intelligence.state || 'uncertain'],
+    ['Current score', intelligence.score == null ? 'Unavailable' : `${Number(intelligence.score).toFixed(3)}`],
+    ['Reference deviation', intelligence.reference_deviation == null ? 'Unavailable' : `${Number(intelligence.reference_deviation).toFixed(3)}`],
+    ['Persistence duration', intelligence.persistence_duration == null ? 'Unavailable' : `${intelligence.persistence_duration} window(s)`],
+    ['Signal-quality status', intelligence.signal_quality_status || 'unknown'],
+  ];
+  const qFactors = Array.isArray(intelligence.factors) && intelligence.factors.length
+    ? intelligence.factors.map((factor) => `• ${factor}`).join('<br>')
+    : 'No movement-intelligence factors are available yet.';
+  el('movement-intelligence-panel').innerHTML = intelligenceRows.map(([label, value]) => diagnosticRow(label, value)).join('') + `<div class="quality-diagnostic"><span>Explanation</span><strong>${escapeHtml(intelligence.summary || 'Not implemented')}</strong><p>${qFactors}</p></div>`;
+
+  const comparisonMetrics = comparison.metrics || {};
+  const comparisonRows = [
+    ['False alarms / hr', comparisonMetrics.false_alarms_per_hour == null ? 'Unavailable' : String(comparisonMetrics.false_alarms_per_hour)],
+    ['Precision', comparisonMetrics.precision == null ? 'Unavailable' : String(comparisonMetrics.precision)],
+    ['Recall', comparisonMetrics.recall == null ? 'Unavailable' : String(comparisonMetrics.recall)],
+    ['Detection delay', comparisonMetrics.detection_delay == null ? 'Unavailable' : String(comparisonMetrics.detection_delay)],
+    ['End-to-end latency', comparisonMetrics.end_to_end_latency_ms == null ? 'Unavailable' : `${comparisonMetrics.end_to_end_latency_ms} ms`],
+  ];
+  el('research-comparison-panel').innerHTML = comparison.available
+    ? comparisonRows.map(([label, value]) => diagnosticRow(label, value)).join('')
+    : `<div class="quality-diagnostic"><span>Evaluation status</span><strong>Metrics unavailable</strong><p>${escapeHtml(comparison.summary || 'Ground-truth annotations are not available for evaluation.')}</p></div>`;
 }
 
 function statusClass(status) {
@@ -725,19 +768,32 @@ function renderQuality(latest) {
     deviceCard('<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="1"/><circle cx="16" cy="12" r="1"/><circle cx="10" cy="18" r="1"/></svg>', 'NeuroWatch backend', state.backendConnected ? 'Online' : 'Unavailable', state.backendConnected ? 'Health endpoint responded' : 'Health endpoint not responding', state.backendConnected ? 'API request succeeded' : 'Unavailable', state.backendConnected ? 'API reachable' : 'Unavailable', state.backendConnected ? 'The FastAPI health endpoint responded. This indicates backend connectivity only—not sensor connectivity.' : 'Unable to reach the FastAPI health endpoint.', 'Backend status is determined by GET /api/health; it does not imply any device is connected.'),
   ].join('');
 
-  el('quality-summary').textContent = mpuEvidence ? (fresh ? 'Recent sensor readings' : 'Readings are stale') : 'Measurement unavailable';
-  el('quality-detail').textContent = mpuEvidence ? (fresh ? `Last packet ${Math.round(age / 1000)} seconds ago.` : 'No fresh movement packet in the last 30 seconds.') : 'A complete movement-sensor packet is needed.';
+  const signalQuality = state.signalQuality || { available: false, status: 'insufficient_data', summary: 'No signal-quality assessment is available.', quality_score: 0.0, metrics: {} };
+  const qualityStatusText = signalQuality.status === 'good'
+    ? 'Recent sensor readings'
+    : signalQuality.status === 'warning'
+      ? 'Readings are degraded'
+      : signalQuality.status === 'poor'
+        ? 'Data quality is poor'
+        : 'Measurement unavailable';
+  el('quality-summary').textContent = qualityStatusText;
+  el('quality-detail').textContent = signalQuality.summary || 'A complete movement-sensor packet is needed.';
   el('home-sensor-state').textContent = mpuEvidence ? (fresh ? 'Reporting recently' : 'Last reading is stale') : 'Waiting for MPU6050 data';
   setDot(el('home-sensor-dot'), mpuEvidence ? (fresh ? 'is-connected' : 'is-stale') : 'state-muted');
   el('home-backend-state').textContent = state.backendConnected ? 'API reachable' : 'Unavailable';
   setDot(el('home-backend-dot'), state.backendConnected ? 'is-connected' : 'is-error');
   el('quality-source-badge').textContent = latest ? String(source).toUpperCase() : 'NO DATA';
 
+  const metrics = signalQuality.metrics || {};
   const rows = [
     ['Latest packet', lastSeen, latest ? 'Timestamp reported by sensor payload.' : 'No packet available.'],
     ['Packet age', browserFreshness, 'Calculated in the browser from the packet timestamp.'],
     ['Device freshness field', deviceFreshness, 'Optional sensor_freshness_ms field from payload.'],
     ['Source', source, 'Payload source label; simulation remains disabled by default.'],
+    ['Signal quality', String(signalQuality.status || 'unknown').toUpperCase(), 'Measured from packet gaps, timing irregularity, clipping, and flatlined/noisy windows.'],
+    ['Quality score', signalQuality.quality_score == null ? 'Unavailable' : `${Number(signalQuality.quality_score).toFixed(2)}/1.00`, 'Higher is better and reflects only the available signal data.'],
+    ['Missing packets', metrics.missing_packets == null ? 'Unknown' : String(metrics.missing_packets), 'Sequence gaps are counted only when sequence numbers are available.'],
+    ['Sequence gaps', metrics.sequence_gaps == null ? 'Unknown' : String(metrics.sequence_gaps), 'Values greater than zero indicate out-of-order or missing packets.'],
     ['Axis completeness', mpuEvidence ? '6 of 6 IMU axes' : latest ? 'Not confirmed' : 'No data', 'Complete axis set is required to confirm an MPU6050 packet.'],
     ['Session packets', String(state.history.length), 'Current dashboard history window (up to 50 records).'],
   ];
@@ -748,6 +804,9 @@ function renderState(payload) {
   state.history = completeHistory(payload.history);
   state.baseline = payload.baseline && typeof payload.baseline === 'object' ? payload.baseline : null;
   state.alerts = Array.isArray(payload.alerts) ? payload.alerts : [];
+  state.signalQuality = payload.signal_quality && typeof payload.signal_quality === 'object' ? payload.signal_quality : null;
+  state.movementIntelligence = payload.movement_intelligence && typeof payload.movement_intelligence === 'object' ? payload.movement_intelligence : null;
+  state.researchMetrics = payload.research_metrics && typeof payload.research_metrics === 'object' ? payload.research_metrics : null;
   const latest = getLatest();
 
   const fresh = isFresh(latest);
