@@ -10,7 +10,9 @@ import time
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
+
+from neuroml.features import FEATURE_DEFINITIONS, FEATURE_VERSION, summarize_features
 
 
 AXES = ("ax", "ay", "az", "gx", "gy", "gz")
@@ -24,6 +26,21 @@ Z_SCORE_FLOOR = 1e-6
 REVIEW_THRESHOLD = 2.5
 MARKED_THRESHOLD = 4.0
 PERSISTENCE_WINDOWS = 3
+PERSISTENT_CHANGE_MIN_SESSIONS = int(os.environ.get("NEUROWATCH_CHANGE_MIN_SESSIONS", "3"))
+PERSISTENT_CHANGE_LOOKBACK_SESSIONS = int(os.environ.get("NEUROWATCH_CHANGE_LOOKBACK_SESSIONS", "5"))
+PERSISTENT_CHANGE_Z_THRESHOLD = float(os.environ.get("NEUROWATCH_CHANGE_Z_THRESHOLD", "2.0"))
+if (
+    PERSISTENT_CHANGE_MIN_SESSIONS < 2
+    or PERSISTENT_CHANGE_LOOKBACK_SESSIONS < PERSISTENT_CHANGE_MIN_SESSIONS
+    or not math.isfinite(PERSISTENT_CHANGE_Z_THRESHOLD)
+    or PERSISTENT_CHANGE_Z_THRESHOLD <= 0
+):
+    raise ValueError("Longitudinal change-detection settings are invalid.")
+
+CALIBRATION_TEST_PROTOCOL = (
+    "Personal reference collection for the selected calibration duration; sensor placement and activity protocol "
+    "are user-directed and must be kept consistent across sessions."
+)
 
 
 def _utc_now() -> datetime:
@@ -77,6 +94,137 @@ def _magnitude_features(samples: List[Dict[str, Any]], axes: tuple[str, str, str
     }
 
 
+def _movement_feature_comparisons(
+    current: Dict[str, Any],
+    baseline: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if current.get("status") != "available" or not baseline or baseline.get("status") != "available":
+        return {
+            "status": "insufficient_data",
+            "features": {},
+            "message": current.get("message") or "Comparable feature summaries are unavailable.",
+        }
+
+    comparisons: Dict[str, Dict[str, Any]] = {}
+    current_statistics = current.get("feature_statistics", {})
+    baseline_statistics = baseline.get("feature_statistics", {})
+    for name in sorted(set(current_statistics) & set(baseline_statistics)):
+        measured = current_statistics[name]
+        reference = baseline_statistics[name]
+        measured_mean = float(measured["mean"])
+        baseline_mean = float(reference["mean"])
+        baseline_sd = float(reference["standard_deviation"])
+        difference = measured_mean - baseline_mean
+        unit = FEATURE_DEFINITIONS.get(name, {}).get("unit", "unit unknown")
+        comparisons[name] = {
+            "baseline_mean": baseline_mean,
+            "baseline_standard_deviation": baseline_sd,
+            "session_mean": measured_mean,
+            "absolute_difference": abs(difference),
+            "signed_difference": difference,
+            "relative_change_percent": (
+                difference / abs(baseline_mean) * 100
+                if abs(baseline_mean) > 1e-12
+                else None
+            ),
+            "standardized_difference": (
+                difference / baseline_sd if baseline_sd > 1e-9 else None
+            ),
+            "unit": unit,
+        }
+    return {
+        "status": "available" if comparisons else "insufficient_data",
+        "features": comparisons,
+        "message": None if comparisons else "No shared feature values were available for comparison.",
+    }
+
+
+def _longitudinal_change(
+    profile: Dict[str, Any],
+    session: Dict[str, Any],
+    current_summary: Dict[str, Any],
+    baseline_summary: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    if (
+        current_summary.get("status") != "available"
+        or not baseline_summary
+        or session.get("quality", {}).get("status") != "good"
+    ):
+        return {
+            "state": "insufficient_data",
+            "experimental": True,
+            "valid_session_count": 0,
+            "required_session_count": PERSISTENT_CHANGE_MIN_SESSIONS,
+            "lookback_session_count": PERSISTENT_CHANGE_LOOKBACK_SESSIONS,
+            "z_threshold": PERSISTENT_CHANGE_Z_THRESHOLD,
+            "message": "Valid feature summaries are required for longitudinal change detection.",
+        }
+
+    valid_sessions: List[Dict[str, Any]] = []
+    for prior in profile["sessions"]:
+        summary = prior.get("movement_feature_summary")
+        if summary is None and prior.get("samples"):
+            summary = summarize_features(prior["samples"])
+        if prior.get("quality", {}).get("status") == "good" and summary and summary.get("status") == "available":
+            valid_sessions.append({"session": prior, "summary": summary})
+    valid_sessions.append({"session": session, "summary": current_summary})
+    valid_sessions = valid_sessions[-PERSISTENT_CHANGE_LOOKBACK_SESSIONS:]
+
+    per_feature: Dict[str, int] = {}
+    current_comparisons = _movement_feature_comparisons(current_summary, baseline_summary)["features"]
+    for feature in current_comparisons:
+        baseline_statistic = baseline_summary.get("feature_statistics", {}).get(feature)
+        if not baseline_statistic or float(baseline_statistic["standard_deviation"]) <= 1e-9:
+            continue
+        deviations = 0
+        for entry in valid_sessions:
+            value = entry["summary"].get("feature_statistics", {}).get(feature)
+            if not value:
+                continue
+            z_score = (
+                float(value["mean"]) - float(baseline_statistic["mean"])
+            ) / float(baseline_statistic["standard_deviation"])
+            if abs(z_score) >= PERSISTENT_CHANGE_Z_THRESHOLD:
+                deviations += 1
+        if deviations:
+            per_feature[feature] = deviations
+
+    persistent = [
+        (feature, count)
+        for feature, count in per_feature.items()
+        if count >= PERSISTENT_CHANGE_MIN_SESSIONS
+    ]
+    latest_deviation = any(
+        comparison.get("standardized_difference") is not None
+        and abs(float(comparison["standardized_difference"])) >= PERSISTENT_CHANGE_Z_THRESHOLD
+        for comparison in current_comparisons.values()
+    )
+    if len(valid_sessions) < PERSISTENT_CHANGE_MIN_SESSIONS:
+        state = "insufficient_sessions"
+    elif persistent:
+        state = "persistent_deviation"
+    elif latest_deviation:
+        state = "temporary_fluctuation"
+    else:
+        state = "no_persistent_deviation"
+    persistent.sort(key=lambda item: (-item[1], item[0]))
+    return {
+        "state": state,
+        "experimental": True,
+        "valid_session_count": len(valid_sessions),
+        "required_session_count": PERSISTENT_CHANGE_MIN_SESSIONS,
+        "lookback_session_count": PERSISTENT_CHANGE_LOOKBACK_SESSIONS,
+        "z_threshold": PERSISTENT_CHANGE_Z_THRESHOLD,
+        "features": [
+            {"feature": feature, "deviating_session_count": count}
+            for feature, count in persistent
+        ],
+        "message": (
+            "Experimental repeated-session deviation flag; thresholds are not clinically validated."
+        ),
+    }
+
+
 def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[str, Any]:
     samples = session["samples"]
     chronological_samples = sorted(
@@ -101,7 +249,7 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
     acceleration = _magnitude_features(samples, ACCEL_AXES, "m/s^2") if samples else None
     gyroscope = _magnitude_features(samples, GYRO_AXES, "deg/s") if samples else None
     timestamps = [
-        _parse_timestamp(sample.get("sensor_timestamp") or sample["timestamp"]).timestamp()
+        _parse_timestamp(sample["timestamp"]).timestamp()
         for sample in chronological_samples
     ]
     intervals = [right - left for left, right in zip(timestamps, timestamps[1:]) if right > left]
@@ -165,6 +313,37 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
         }
 
     quality = session["quality"]
+    movement_summary = summarize_features(session["samples"]) if samples else {
+        "version": FEATURE_VERSION,
+        "status": "insufficient_data",
+        "message": "No accepted sensor samples were recorded.",
+        "sampling_information": {"sample_rate_hz": None, "status": "insufficient_data"},
+        "window_seconds": 4.0,
+        "window_count": 0,
+        "values": {},
+        "feature_statistics": {},
+        "limitations": ["No accepted sensor samples were recorded."],
+    }
+    baseline_movement_summary = baseline.get("movement_feature_summary")
+    movement_comparisons = _movement_feature_comparisons(
+        movement_summary,
+        baseline_movement_summary,
+    )
+    longitudinal_change = _longitudinal_change(
+        profile,
+        session,
+        movement_summary,
+        baseline_movement_summary,
+    )
+    model_analysis = session.get("model_analysis", {
+        "state": "disabled",
+        "model_name": None,
+        "model_version": None,
+        "output": None,
+        "confidence_available": False,
+        "data_quality": movement_summary["status"],
+        "message": "Movement classification is unavailable until a compatible trained model is installed.",
+    })
     limitations = []
     limitations.append(
         "Packet counts include packets routed to this active monitoring session; malformed or stale requests rejected before routing are not included."
@@ -179,6 +358,22 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
         limitations.append("Effective sampling rate is unavailable because fewer than two timestamped samples were recorded.")
     if quality.get("status") != "good":
         limitations.append(f"Session signal quality was {quality.get('status', 'unavailable')}; interpret comparisons cautiously.")
+    if movement_summary["status"] != "available":
+        limitations.append(
+            "ML movement features were unavailable: "
+            + str(movement_summary.get("message") or movement_summary["status"])
+        )
+    limitations.extend(movement_summary.get("limitations", []))
+    if model_analysis.get("state") != "available":
+        limitations.append(
+            "ML classification is unavailable: "
+            + str(model_analysis.get("message") or model_analysis.get("state"))
+        )
+    if longitudinal_change["state"] == "persistent_deviation":
+        limitations.append(
+            "A repeated experimental feature deviation was observed; it is not evidence of disease progression. "
+            "Consider reviewing persistent concerns with a clinician."
+        )
     standardized_changes = [
         {
             "feature": axis.upper(),
@@ -255,6 +450,11 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
             "axes": baseline["axes"],
             "features": baseline["features"],
             "units": baseline["units"],
+            "baseline_version": baseline.get("baseline_version", "legacy"),
+            "sensor_placement": baseline.get("sensor_placement"),
+            "test_protocol": baseline.get("test_protocol"),
+            "sampling_information": baseline.get("sampling_information"),
+            "movement_feature_summary": baseline_movement_summary,
         },
         "statistics": {"axes": axes, "acceleration_magnitude": acceleration, "gyroscope_magnitude": gyroscope},
         "comparisons": {"axes": comparisons, "magnitudes": magnitude_comparisons},
@@ -267,6 +467,10 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
             "rejected": session["rejected_packet_count"],
         },
         "effective_sample_rate_hz": sample_rate,
+        "movement_feature_summary": movement_summary,
+        "movement_feature_comparisons": movement_comparisons,
+        "longitudinal_change": longitudinal_change,
+        "model_analysis": model_analysis,
         "timestamp_gap_count": len(large_gaps),
         "limitations": limitations,
         "insights": insights,
@@ -613,9 +817,16 @@ class ProfileStore:
                 raise KeyError(f"Profile '{profile_id}' was not found.")
             return _copy(profile)
 
-    def start_calibration(self, profile_id: str, duration_seconds: int) -> Dict[str, Any]:
+    def start_calibration(
+        self,
+        profile_id: str,
+        duration_seconds: int,
+        sensor_placement: Optional[str] = None,
+    ) -> Dict[str, Any]:
         if duration_seconds not in (120, 150, MAX_CALIBRATION_SECONDS):
             raise ValueError("Calibration duration must be 120, 150, or 180 seconds.")
+        if sensor_placement not in {None, "unknown", "wrist", "hand", "forearm", "other"}:
+            raise ValueError("Sensor placement must be unknown, wrist, hand, forearm, or other.")
         with self._lock:
             self.profile(profile_id)
             if self.monitoring is not None:
@@ -625,6 +836,8 @@ class ProfileStore:
             self.calibration = {
                 "calibration_id": f"cal-{uuid.uuid4().hex}",
                 "profile_id": profile_id,
+                "sensor_placement": None if sensor_placement in {None, "unknown"} else sensor_placement,
+                "test_protocol": CALIBRATION_TEST_PROTOCOL,
                 "duration_seconds": duration_seconds,
                 "started_at": _timestamp(),
                 "started_monotonic": time.monotonic(),
@@ -642,6 +855,17 @@ class ProfileStore:
     def _finish_calibration(self, calibration: Dict[str, Any], status: str, now: datetime) -> None:
         samples = calibration["samples"]
         quality = _signal_quality(samples)
+        movement_summary = summarize_features(samples) if samples else {
+            "version": FEATURE_VERSION,
+            "status": "insufficient_data",
+            "message": "No accepted sensor samples were recorded.",
+            "sampling_information": {"sample_rate_hz": None, "status": "insufficient_data"},
+            "window_seconds": 4.0,
+            "window_count": 0,
+            "values": {},
+            "feature_statistics": {},
+            "limitations": ["No accepted sensor samples were recorded."],
+        }
         elapsed = min(
             calibration["duration_seconds"],
             max(0.0, time.monotonic() - calibration["started_monotonic"]),
@@ -658,6 +882,7 @@ class ProfileStore:
             and elapsed >= calibration["duration_seconds"]
             and coverage >= calibration["duration_seconds"] * 0.7
             and quality["status"] == "good"
+            and movement_summary["status"] == "available"
         )
         profile = self.profiles[calibration["profile_id"]]
         calibration_record = {
@@ -672,9 +897,19 @@ class ProfileStore:
             "coverage_seconds": coverage,
             "quality": {**quality, "reliable": reliable},
             "state": "completed" if reliable else ("insufficient_data" if status == "completed" else status),
+            "incomplete_reason": (
+                movement_summary.get("message")
+                or "Calibration did not meet duration, coverage, or sensor-quality requirements."
+                if status == "completed" and not reliable
+                else None
+            ),
             "baseline": None,
             "samples": samples,
             "units": {"acceleration": "m/s^2", "gyroscope": "deg/s"},
+            "sensor_placement": calibration.get("sensor_placement"),
+            "test_protocol": calibration["test_protocol"],
+            "sampling_information": movement_summary["sampling_information"],
+            "movement_feature_summary": movement_summary,
         }
         if reliable:
             calibration_record["baseline"] = {
@@ -685,9 +920,14 @@ class ProfileStore:
                 "completed_at": calibration_record["completed_at"],
                 "duration_seconds": calibration["duration_seconds"],
                 "sample_count": len(samples),
+                "baseline_version": "v2",
                 "quality": calibration_record["quality"],
                 "axes": _axis_statistics(samples),
                 "features": _baseline_features(samples),
+                "movement_feature_summary": movement_summary,
+                "sensor_placement": calibration.get("sensor_placement"),
+                "test_protocol": calibration["test_protocol"],
+                "sampling_information": movement_summary["sampling_information"],
                 "units": calibration_record["units"],
             }
             profile["baseline"] = calibration_record["baseline"]
@@ -786,7 +1026,10 @@ class ProfileStore:
             }
             return self.monitoring_status()
 
-    def end_monitoring(self) -> Dict[str, Any]:
+    def end_monitoring(
+        self,
+        model_analyzer: Optional[Callable[[List[Dict[str, Any]]], Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
         with self._lock:
             if self.monitoring is None:
                 raise ValueError("There is no active profile monitoring session.")
@@ -803,17 +1046,23 @@ class ProfileStore:
                 "baseline_calibration_id": session["baseline"]["calibration_id"],
                 "features": _live_features(session["samples"][-10:]) or {},
                 "quality": _signal_quality(session["samples"]),
+                "movement_feature_summary": summarize_features(session["samples"])
+                if session["samples"]
+                else {"version": FEATURE_VERSION, "status": "insufficient_data", "values": {}, "feature_statistics": {}},
                 "events": session["events"],
                 "samples": session["samples"],
                 "baseline": _copy(session["baseline"]),
                 "units": {"acceleration": "m/s^2", "gyroscope": "deg/s"},
             }
+            if model_analyzer is not None:
+                record["model_analysis"] = model_analyzer(record["samples"])
             profile = self.profiles[session["profile_id"]]
             report = _session_analysis(record, profile)
             record["analysis"] = {key: value for key, value in report.items() if key != "samples"}
             profile["sessions"].append(record)
             self.monitoring = None
             self._save()
+            report["longitudinal_history"] = self._trends(profile)
             report["session"] = {
                 key: value for key, value in record.items()
                 if key not in {"samples", "baseline", "analysis"}
@@ -824,6 +1073,7 @@ class ProfileStore:
                     "session_id", "profile_id", "started_at", "ended_at",
                     "duration_seconds", "sample_count", "rejected_packet_count",
                     "baseline_calibration_id", "features", "units",
+                    "movement_feature_summary", "model_analysis",
                 }
             })
             return _copy(report)
@@ -860,6 +1110,7 @@ class ProfileStore:
                             report = _session_analysis(archived, profile)
                         else:
                             report = _copy(cached_analysis)
+                        report["longitudinal_history"] = self._trends(profile)
                         report["samples"] = sorted(
                             _copy(session["samples"]),
                             key=lambda sample: _parse_timestamp(sample.get("sensor_timestamp") or sample["timestamp"]),
@@ -1199,6 +1450,13 @@ class ProfileStore:
                         for axis in GYRO_AXES
                     },
                 },
+                "movement_feature_summary": session.get("movement_feature_summary")
+                or summarize_features(session["samples"]),
+                "movement_feature_comparisons": (analysis or {}).get(
+                    "movement_feature_comparisons", {}
+                ),
+                "longitudinal_change": (analysis or {}).get("longitudinal_change", {}),
+                "model_analysis": session.get("model_analysis", {}),
                 "quality": session["quality"],
                 "profile_id": profile["profile_id"],
             })
@@ -1217,6 +1475,9 @@ class ProfileStore:
                 "state": calibration["state"],
                 "quality": calibration["quality"],
                 "baseline_available": calibration.get("baseline") is not None,
+                "sensor_placement": calibration.get("sensor_placement"),
+                "incomplete_reason": calibration.get("incomplete_reason"),
+                "movement_feature_summary": calibration.get("movement_feature_summary"),
             }
             for calibration in profile["calibrations"]
         ]

@@ -205,9 +205,12 @@
 
     ctx.fillStyle = '#65758b';
     ctx.textAlign = 'left';
-    ctx.fillText(timestamps.length ? new Date(firstTime).toLocaleTimeString() : 'earlier sessions', pad.left, height - 7);
+    const formatDateAxis = (timestamp) => options.dateAxis
+      ? new Date(timestamp).toLocaleDateString()
+      : new Date(timestamp).toLocaleTimeString();
+    ctx.fillText(timestamps.length ? formatDateAxis(firstTime) : 'earlier sessions', pad.left, height - 7);
     ctx.textAlign = 'right';
-    ctx.fillText(timestamps.length ? new Date(lastTime).toLocaleTimeString() : 'latest sessions', width - pad.right, height - 7);
+    ctx.fillText(timestamps.length ? formatDateAxis(lastTime) : 'latest sessions', width - pad.right, height - 7);
   }
 
   function drawRawCharts(history) {
@@ -223,6 +226,26 @@
     drawChart('gyro-chart', seriesFor(['gx', 'gy', 'gz']), { empty: 'Waiting for real gyroscope packets.' });
   }
 
+  function drawMovementFeatureTrend(canvasId, trends, feature, baseline, empty) {
+    const points = (trends || [])
+      .map((entry) => ({
+        timestamp: entry.ended_at,
+        value: entry.movement_feature_summary?.values?.[feature],
+      }))
+      .filter((point) => numeric(point.value) !== null);
+    const reference = baseline?.feature_statistics?.[feature];
+    drawChart(canvasId, [{
+      color: '#2878d0',
+      points,
+    }], {
+      reference: reference
+        ? { mean: reference.mean, std: reference.standard_deviation }
+        : null,
+      dateAxis: true,
+      empty,
+    });
+  }
+
   function renderBaseline(baseline) {
     const target = $('baseline-statistics');
     if (!baseline) {
@@ -233,7 +256,7 @@
     }
     const quality = baseline.quality || {};
     $('profile-baseline-state').textContent = quality.reliable ? 'Reliable baseline saved' : 'Baseline quality needs review';
-    $('profile-summary').textContent = `Profile ${baseline.profile_id} · last calibrated ${new Date(baseline.completed_at).toLocaleString()} · ${baseline.sample_count} samples · ${quality.status || 'quality unavailable'}`;
+    $('profile-summary').textContent = `Profile ${baseline.profile_id} · last calibrated ${new Date(baseline.completed_at).toLocaleString()} · ${baseline.sample_count} samples · ${quality.status || 'quality unavailable'} · placement ${baseline.sensor_placement || 'unknown'} · ${format(baseline.sampling_information?.sample_rate_hz, 1)} Hz`;
     target.innerHTML = Object.entries(baseline.axes || {}).map(([axis, statistic]) =>
       `<div><span>${escapeHtml(axis.toUpperCase())} · ${axis.startsWith('a') ? 'm/s²' : 'deg/s'}</span><strong>Mean ${format(statistic.mean, 3)}</strong><small>SD ${format(statistic.standard_deviation, 3)} · range ${format(statistic.minimum, 3)}–${format(statistic.maximum, 3)}</small></div>`
     ).join('');
@@ -277,6 +300,37 @@
       ),
       `<small>${escapeHtml(deviation.interpretation || 'Experimental movement comparison only; not a medical diagnosis.')}</small>`,
     ].join('');
+    const model = report.model_analysis || {};
+    const modelOutput = model.output?.class;
+    $('session-ml-status').textContent = [
+      `Model ${model.model_name || 'unavailable'}${model.model_version ? ` · ${model.model_version}` : ''}`,
+      `status ${model.state || 'unavailable'}`,
+      `data quality ${model.data_quality || report.movement_feature_summary?.status || 'unavailable'}`,
+      modelOutput ? `movement-pattern class ${modelOutput}` : 'no class output',
+      'no calibrated confidence available',
+    ].join(' · ');
+    $('session-ml-features').innerHTML = Object.entries(
+      report.movement_feature_comparisons?.features || {}
+    ).slice(0, 8).map(([name, comparison]) =>
+      `<div><span>${escapeHtml(name.replaceAll('_', ' '))} · ${escapeHtml(comparison.unit)}</span>` +
+      `<strong>${format(comparison.session_mean, 3)}</strong>` +
+      `<small>Baseline ${format(comparison.baseline_mean, 3)} · absolute change ${format(comparison.absolute_difference, 3)} · relative change ${comparison.relative_change_percent == null ? 'unavailable' : `${format(comparison.relative_change_percent, 1)}%`}</small></div>`
+    ).join('') || '<div class="muted">Comparable feature values are unavailable for this session.</div>';
+    const change = report.longitudinal_change || {};
+    $('session-persistent-change').textContent =
+      `Experimental persistent-change flag: ${change.state || 'insufficient_data'} · ` +
+      `${change.valid_session_count || 0}/${change.required_session_count || 3} valid sessions · ` +
+      `${change.message || 'Thresholds are exploratory and not clinically validated.'}` +
+      (change.state === 'persistent_deviation'
+        ? ' Persistent concerns should be reviewed with a clinician; this is not evidence of disease progression.'
+        : '');
+    drawMovementFeatureTrend(
+      'session-ml-trend-chart',
+      report.longitudinal_history || [],
+      $('ml-trend-feature').value,
+      report.baseline.movement_feature_summary,
+      'No valid repeated-session feature measurements are available.'
+    );
 
     const samples = (report.samples || []).slice().sort((left, right) =>
       Date.parse(left.sensor_timestamp || left.timestamp) - Date.parse(right.sensor_timestamp || right.timestamp)
@@ -393,11 +447,15 @@
     $('session-magnitude-statistics').innerHTML = '';
     $('session-events').innerHTML = '';
     $('session-limitations').innerHTML = '';
+    $('session-ml-status').textContent = message;
+    $('session-ml-features').innerHTML = '';
+    $('session-persistent-change').textContent = 'Experimental repeated-session change flag unavailable.';
     $('completed-session-select').value = '';
     drawChart('session-accel-chart', [], { empty: message });
     drawChart('session-gyro-chart', [], { empty: message });
     drawChart('session-accel-magnitude-chart', [], { empty: message });
     drawChart('session-gyro-magnitude-chart', [], { empty: message });
+    drawChart('session-ml-trend-chart', [], { empty: message });
   }
 
   async function loadSessionHistory() {
@@ -491,11 +549,58 @@
     $('calibration-quality').textContent = calibration.last_invalid_reason
       ? `Last packet excluded: ${calibration.last_invalid_reason}`
       : quality
-        ? `Result: ${result.state} · ${quality.status} signal · ${result.accepted_sample_count} samples · ${result.duration_seconds}s requested`
+        ? `Result: ${result.state} · ${quality.status} signal · ${result.accepted_sample_count} samples · ${result.duration_seconds}s requested${result.incomplete_reason ? ` · ${result.incomplete_reason}` : ''}`
         : '';
   }
 
-  function renderMonitoring(profileState, comparison) {
+  function renderMLAnalysis(profileState, modelStatus) {
+    const trends = profileState.trends || [];
+    const latest = trends[trends.length - 1];
+    const latestModel = latest?.model_analysis || {};
+    const outputClass = latestModel.output?.class;
+    const baselineFeatures = profileState.baseline?.movement_feature_summary;
+    const featureComparisons = latest?.movement_feature_comparisons?.features || {};
+    const modelName = modelStatus?.model_name || latestModel.model_name;
+    const modelVersion = modelStatus?.model_version || latestModel.model_version;
+    $('ml-model-status').textContent = modelStatus
+      ? `${modelStatus.state}${modelName ? ` · ${modelName}` : ''}${modelVersion ? ` · ${modelVersion}` : ''}`
+      : 'Model status unavailable';
+    $('ml-model-name').textContent = outputClass
+      ? `Movement-pattern class: ${outputClass}`
+      : 'No trained-model class output';
+    $('ml-model-message').textContent = latestModel.message
+      || modelStatus?.message
+      || 'Classification is unavailable until a compatible model is trained and installed.';
+    const quality = latestModel.data_quality || latest?.movement_feature_summary?.status || 'insufficient_data';
+    $('ml-data-quality').textContent = `Latest completed-session data quality: ${quality}`;
+    $('ml-baseline-status').textContent = baselineFeatures?.status === 'available'
+      ? `Feature reference ${baselineFeatures.version} · ${baselineFeatures.window_count} windows`
+      : 'No feature baseline available';
+    const comparisons = Object.entries(featureComparisons).slice(0, 3).map(([name, value]) =>
+      `${name.replaceAll('_', ' ')}: ${format(value.absolute_difference, 3)} ${value.unit}` +
+      `${value.relative_change_percent == null ? '' : ` (${format(value.relative_change_percent, 1)}%)`}`
+    );
+    $('ml-baseline-comparison').textContent = comparisons.length
+      ? comparisons.join(' · ')
+      : 'Feature comparisons require a valid calibration and completed session.';
+    const change = latest?.longitudinal_change || {};
+    $('ml-persistent-change').textContent =
+      `Experimental repeated-session flag: ${change.state || 'insufficient_data'} · ` +
+      `${change.valid_session_count || 0}/${change.required_session_count || 3} valid sessions. ` +
+      `${change.message || 'Thresholds are exploratory, not clinically validated.'}` +
+      (change.state === 'persistent_deviation'
+        ? ' Review persistent concerns with a clinician; this is not evidence of disease progression.'
+        : '');
+    drawMovementFeatureTrend(
+      'ml-feature-trend-chart',
+      trends,
+      $('ml-trend-feature').value,
+      baselineFeatures,
+      'No valid repeated-session feature measurements are available.'
+    );
+  }
+
+  function renderMonitoring(profileState, comparison, modelStatus = latestState?.ml_analysis_status) {
     const monitor = profileState.monitoring || {};
     const active = ['active', 'stale', 'waiting_for_sensor'].includes(monitor.state);
     const sameProfile = monitor.profile_id === selectedProfile;
@@ -538,6 +643,7 @@
     };
     trendGraph('accel-trend-chart', 'acceleration_magnitude', '#2878d0', 'No completed sessions with recorded acceleration summaries yet.');
     trendGraph('gyro-trend-chart', 'gyroscope_magnitude', '#e76f51', 'No completed sessions with recorded gyroscope summaries yet.');
+    renderMLAnalysis(profileState, modelStatus);
     if (comparison) {
       const score = numeric(comparison.score);
       const deviations = comparison.feature_deviations_z || {};
@@ -558,7 +664,10 @@
 
     const calibrationHistory = profileState.calibration_history || [];
     $('calibration-history').innerHTML = calibrationHistory.length
-      ? calibrationHistory.slice().reverse().map((entry) => `<article><strong>${escapeHtml(entry.state.replaceAll('_', ' '))}</strong> · ${escapeHtml(new Date(entry.completed_at).toLocaleString())}<small>${entry.duration_seconds}s requested · ${entry.accepted_sample_count} accepted samples · ${escapeHtml(entry.quality?.status || 'quality unavailable')} quality · baseline ${entry.baseline_available ? 'saved' : 'not saved'}</small></article>`).join('')
+      ? calibrationHistory.slice().reverse().map((entry) => {
+        const values = entry.movement_feature_summary?.values || {};
+        return `<article><strong>${escapeHtml(entry.state.replaceAll('_', ' '))}</strong> · ${escapeHtml(new Date(entry.completed_at).toLocaleString())}<small>${entry.duration_seconds}s requested · ${entry.accepted_sample_count} accepted samples · ${escapeHtml(entry.quality?.status || 'quality unavailable')} quality · baseline ${entry.baseline_available ? 'saved' : 'not saved'} · gyro RMS ${format(values.gyroscope_magnitude_rms, 3)} · accel RMS ${format(values.acceleration_magnitude_rms, 3)}${entry.incomplete_reason ? ` · ${escapeHtml(entry.incomplete_reason)}` : ''}</small></article>`;
+      }).join('')
       : '<div class="muted">No completed calibration sessions.</div>';
   }
 
@@ -708,6 +817,20 @@
           $('session-report-message').style.color = '#b93845';
         }
       });
+      $('ml-trend-feature').addEventListener('change', () => {
+        if (latestState?.profile_state) {
+          renderMLAnalysis(latestState.profile_state, latestState.ml_analysis_status);
+        }
+        if (latestReport) {
+          drawMovementFeatureTrend(
+            'session-ml-trend-chart',
+            latestReport.longitudinal_history || [],
+            $('ml-trend-feature').value,
+            latestReport.baseline.movement_feature_summary,
+            'No valid repeated-session feature measurements are available.'
+          );
+        }
+      });
       $('create-profile-form').addEventListener('submit', (event) => {
         event.preventDefault();
         withAction(async () => {
@@ -734,7 +857,10 @@
         await request(`/api/profiles/${encodeURIComponent(selectedProfile)}/calibrations`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ duration_seconds: Number($('calibration-duration').value) }),
+          body: JSON.stringify({
+            duration_seconds: Number($('calibration-duration').value),
+            sensor_placement: $('sensor-placement').value,
+          }),
         });
       }, 'Calibration started. The backend timer and accepted real packets determine completion.', 'start-calibration'));
       $('cancel-calibration').addEventListener('click', () => withAction(

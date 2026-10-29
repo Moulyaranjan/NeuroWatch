@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import Lock
 from typing import Any, Deque, Dict, List, Optional
+from xml.sax.saxutils import escape
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.exceptions import RequestValidationError
@@ -20,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from starlette.requests import Request
 from movement import AXES, ProfileStore
+from neuroml.service import MovementModelService
 
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -135,6 +137,7 @@ class ProfileCreate(BaseModel):
 
 class CalibrationStart(BaseModel):
     duration_seconds: int = Field(default=120, ge=120, le=180)
+    sensor_placement: Optional[str] = None
 
     @field_validator("duration_seconds")
     @classmethod
@@ -251,6 +254,7 @@ class SessionStore:
 
 store = SessionStore()
 profile_store = ProfileStore(PROFILE_FILE)
+ml_service = MovementModelService()
 _sensor_diagnostics_lock = Lock()
 _sensor_diagnostics: Dict[str, Any] = {
     "invalid_packet_count": 0,
@@ -603,6 +607,46 @@ def build_session_pdf(report: Dict[str, Any]) -> bytes:
         )
     else:
         story.append(Paragraph("Variability percentage changes are unavailable because baseline variability is zero or near zero.", styles["BodyText"]))
+
+    model_analysis = report.get("model_analysis", {})
+    section("ML movement analysis")
+    model_class = (model_analysis.get("output") or {}).get("class")
+    table([
+        ["Field", "Recorded result"],
+        ["Model", escape(str(model_analysis.get("model_name") or "Unavailable"))],
+        ["Model version", escape(str(model_analysis.get("model_version") or "Unavailable"))],
+        ["Model status", escape(str(model_analysis.get("state", "unavailable")))],
+        ["Data quality", escape(str(model_analysis.get("data_quality", "unavailable")))],
+        ["Movement-pattern class", escape(str(model_class or "No model output"))],
+        ["Personal feature comparison", escape(str(report.get("movement_feature_comparisons", {}).get("status", "unavailable")))],
+        ["Experimental repeated-session flag", escape(str(report.get("longitudinal_change", {}).get("state", "insufficient_data")))],
+    ], [62 * mm, 118 * mm])
+    if model_analysis.get("message"):
+        story.append(Paragraph(escape(str(model_analysis["message"])), styles["SmallNote"]))
+    if model_class is not None:
+        story.append(Paragraph(
+            "The class is the model's dataset label output only. No calibrated confidence, diagnosis, disease risk, or severity score is provided.",
+            styles["SmallNote"],
+        ))
+    movement_comparisons = report.get("movement_feature_comparisons", {}).get("features", {})
+    if movement_comparisons:
+        comparison_rows = [["Feature", "Baseline", "Session", "Absolute change", "Relative change"]]
+        for feature, comparison in movement_comparisons.items():
+            comparison_rows.append([
+                escape(feature),
+                f"{comparison['baseline_mean']:.5g} {comparison['unit']}",
+                f"{comparison['session_mean']:.5g} {comparison['unit']}",
+                f"{comparison['absolute_difference']:.5g} {comparison['unit']}",
+                f"{comparison['relative_change_percent']:.3g}%"
+                if comparison["relative_change_percent"] is not None else "Unavailable",
+            ])
+        table(comparison_rows, [52 * mm, 30 * mm, 30 * mm, 34 * mm, 34 * mm])
+    if report.get("longitudinal_change", {}).get("state") == "persistent_deviation":
+        story.append(Paragraph(
+            "Repeated feature deviations are experimental and are not evidence of Parkinson's progression. "
+            "Discuss persistent concerns with a clinician.",
+            styles["SmallNote"],
+        ))
 
     section("Detected movement-change events")
     if report["events"]:
@@ -1152,6 +1196,7 @@ def build_dashboard_payload(profile_id: Optional[str] = None) -> Dict[str, Any]:
         "cusum": cusum,
         "research_metrics": research_metrics,
         "profile_state": profile_state,
+        "ml_analysis_status": ml_service.status(),
         "sensor_temperature": {
             "state": temperature_state,
             "temperature_c": latest_temperature,
@@ -1305,7 +1350,7 @@ async def start_session() -> Dict[str, Any]:
 async def end_session() -> Dict[str, Any]:
     if profile_store.monitoring is not None:
         try:
-            report = profile_store.end_monitoring()
+            report = profile_store.end_monitoring(ml_service.analyze)
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         store.current_session_id = None
@@ -1359,7 +1404,11 @@ async def get_profile(profile_id: str) -> Dict[str, Any]:
 @app.post("/api/profiles/{profile_id}/calibrations")
 async def start_calibration(profile_id: str, payload: CalibrationStart) -> Dict[str, Any]:
     try:
-        state = profile_store.start_calibration(profile_id, payload.duration_seconds)
+        state = profile_store.start_calibration(
+            profile_id,
+            payload.duration_seconds,
+            payload.sensor_placement,
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -1398,7 +1447,7 @@ async def start_monitoring(profile_id: str) -> Dict[str, Any]:
 @app.post("/api/monitoring/end")
 async def end_monitoring() -> Dict[str, Any]:
     try:
-        report = profile_store.end_monitoring()
+        report = profile_store.end_monitoring(ml_service.analyze)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     await manager.broadcast(build_dashboard_payload(report["profile"]["profile_id"]))

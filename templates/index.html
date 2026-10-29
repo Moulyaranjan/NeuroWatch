@@ -231,6 +231,17 @@ main > footer { color: #65758b; font-size: 10px; padding: 24px 0; }
           </select>
           <small>Only real packets with explicit matching firmware units are used.</small>
         </div>
+        <div class="control-group">
+          <label for="sensor-placement">Sensor placement</label>
+          <select id="sensor-placement">
+            <option value="unknown" selected>Not recorded</option>
+            <option value="wrist">Wrist</option>
+            <option value="hand">Hand</option>
+            <option value="forearm">Forearm</option>
+            <option value="other">Other</option>
+          </select>
+          <small>Keep placement consistent; this field does not imply a diagnosis.</small>
+        </div>
       </div>
       <div class="control-actions">
         <button class="primary" id="start-calibration" disabled>Start Calibration / Recalibrate</button>
@@ -271,6 +282,14 @@ main > footer { color: #65758b; font-size: 10px; padding: 24px 0; }
       <article class="panel" id="session-report-summary">
         <div class="panel-head"><div><p class="label">MEASURED DIFFERENCE FROM FIXED BASELINE</p><h2>Movement deviation summary</h2></div></div>
         <div id="session-deviation-summary">Calculating comparison from the saved session and its baseline…</div>
+      </article>
+      <article class="panel" id="session-ml-analysis">
+        <div class="panel-head"><div><p class="label">ML MOVEMENT ANALYSIS</p><h2>Model output and personal feature changes</h2></div></div>
+        <div id="session-ml-status" class="control-status">Loading model status…</div>
+        <div class="stats-grid" id="session-ml-features"></div>
+        <div id="session-persistent-change" class="control-status">Experimental repeated-session change flag unavailable.</div>
+        <div class="panel-head"><div><p class="label">LONGITUDINAL HISTORY</p><h3>Feature trend across completed sessions</h3></div></div>
+        <canvas id="session-ml-trend-chart" height="220"></canvas>
       </article>
       <div class="panel-head"><div><p class="label">COMPARISON GRAPHS</p><h2>Baseline versus completed session</h2></div></div>
       <div class="feature-grid">
@@ -346,6 +365,33 @@ main > footer { color: #65758b; font-size: 10px; padding: 24px 0; }
         </div>
         <canvas id="gyro-chart" height="220"></canvas>
         <div class="chart-foot"><span>Older ←</span><span>Newest →</span></div>
+      </article>
+    </section>
+
+    <div class="section">
+      <div><p class="label">ML MOVEMENT ANALYSIS</p><h2>Exploratory movement-pattern features</h2></div>
+      <span class="muted" id="ml-model-status">Checking trained model status…</span>
+    </div>
+    <section class="feature-grid">
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">MODEL CLASSIFICATION</p><h2 id="ml-model-name">No model output</h2><p id="ml-model-message">Classification is unavailable until a compatible model is trained and installed.</p></div></div>
+        <div id="ml-data-quality" class="control-status">Data quality: insufficient data</div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">PERSONAL REFERENCE</p><h2 id="ml-baseline-status">No feature baseline available</h2><p id="ml-baseline-comparison">Feature comparisons require a valid calibration and completed session.</p></div></div>
+        <div id="ml-persistent-change" class="control-status">Experimental repeated-session flag: insufficient data.</div>
+      </article>
+      <article class="panel">
+        <div class="panel-head">
+          <div><p class="label">LONGITUDINAL TREND</p><h2>Repeated-session feature</h2><p>Feature values are compared with the fixed personal reference; exploratory only.</p></div>
+          <select id="ml-trend-feature" aria-label="Movement feature trend">
+            <option value="gyroscope_magnitude_rms">Gyroscope magnitude RMS</option>
+            <option value="acceleration_magnitude_rms">Acceleration magnitude RMS</option>
+            <option value="gyroscope_magnitude_dominant_frequency_hz">Gyroscope dominant frequency</option>
+            <option value="acceleration_magnitude_dominant_frequency_hz">Acceleration dominant frequency</option>
+          </select>
+        </div>
+        <canvas id="ml-feature-trend-chart" height="220"></canvas>
       </article>
     </section>
 

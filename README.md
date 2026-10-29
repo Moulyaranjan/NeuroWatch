@@ -186,6 +186,45 @@ The existing `/api/health`, `/api/dashboard-state`, `/api/session/history`, `/ap
 
 Profiles, baselines, calibration samples, completed monitoring readings, baseline snapshots, session summaries, and detected events are stored locally in `data/profiles/profiles.json` using atomic replacement. A completed session's accepted readings are stored once; its report stores derived summary data, not a second copy of the time series. Completed data is retained for historical review and is not silently pruned. The separate legacy session store only retains unassigned packets; profile-bound sensor packets are not duplicated there. Back up or archive the local profile file before moving/reinstalling the application. The existing `.gitignore` excludes local JSON/CSV data under `data/`; keep personal sensor data and credentials out of Git. Active in-progress calibration/monitoring state is process-local and is not resumed after an application restart; completed records and baselines remain saved. Temperature is optional and is absent with the current firmware; if a finite `temperature_c` field is sent, values outside -40 to 125 °C are flagged as implausible and omitted from the trend. Temperature is sensor/chip temperature, not body temperature, and no thermal warning threshold is asserted.
 
+## Experimental ML movement analysis
+
+The ML module is deliberately disabled until a compatible, licensed dataset has been obtained and used to train a model. No model artifact, prediction, clinical metric, or fabricated training data is included in this repository. The public [mPower Researcher Portal](https://www.synapse.org/Synapse:syn4993293) was identified as a possible Parkinson's movement-data source, but this checkout did not establish its project-specific license/data-use terms or verify its label schema, sensor placement, sampling rate, and units. It is therefore **not used** and training is **pending**. A public portal is not itself permission to download or use its data.
+
+The current ESP32 sketch samples every 200 ms (5 Hz). This is sufficient for some time-domain personal-reference features but is not sufficient for the pipeline's 3–10 Hz frequency features or a compatible tremor-pattern classifier. Model training and inference require at least 25 Hz, complete six-axis readings, supported units (m/s² and deg/s), monotonic timestamps, and a stable four-second window. The sensor protocol and firmware are not changed. For the existing device, frequency features and ML classification remain unavailable; the dashboard/report state this explicitly. Do not interpret time-domain baseline changes as a disease signal.
+
+### Training and dataset contract
+
+The reproducible command reads a real, labeled CSV with one sensor sample per row and these columns:
+
+`timestamp_seconds,participant_id,label,ax,ay,az,gx,gy,gz`
+
+Timestamps are Unix seconds; acceleration must be m/s² and gyroscope must be deg/s. Each row must have a genuine participant ID and a source-provided movement label. The trainer rejects invalid values, rates below 25 Hz, incomplete windows, and classes without enough distinct participants for a held-out participant split. It segments contiguous four-second windows with 50% overlap, resamples timing jitter consistently, and uses the same feature-extraction code as inference. Features per axis and vector magnitude include mean, variance, demeaned RMS, peak-to-peak range, dominant spectral peak (0.5–10 Hz), normalized spectral entropy, and 3–10 Hz band power. Feature names, units, and definitions are included in the model metadata. It evaluates a Random Forest and (unless disabled) an SVM on a deterministic participant-independent split, reporting class-wise precision/recall/F1, confusion matrices, balanced accuracy, and macro-F1. The fitted preprocessing pipeline and Random Forest are written as versioned `artifacts/movement-rf-<version>.joblib`, with provenance/evaluation JSON and an active-model pointer. The model exposes class labels only; probabilities/confidence are not reported.
+
+After obtaining data and confirming permission for the intended use, install dependencies and train with the dataset's real provenance and verified license:
+
+```powershell
+.\.venv311\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv311\Scripts\python.exe -m neuroml.train `
+  --dataset C:\path\to\authorized-labeled-samples.csv `
+  --dataset-name "Verified dataset title" `
+  --dataset-source "https://doi.org/..." `
+  --dataset-license "Verified license or data-use terms" `
+  --sampling-rate-hz 50 `
+  --accel-unit m/s^2 `
+  --gyro-unit deg/s `
+  --model-version 1.0.0
+```
+
+Training requires an authorized dataset; do not fill the provenance arguments with guessed values. The command writes to the app's `artifacts/` directory; `current-model.json` is created only after successful training. Restart NeuroWatch after training so its one-time startup load can read the newly created artifact. A missing or unreadable artifact disables inference with an explicit status; it never creates predictions. Only load trusted joblib files because they use Python object deserialization.
+
+Personal calibration baselines preserve prior calibration records and now include a feature-summary version, available time/frequency statistics, placement (if recorded), test-protocol description, and measured sampling information. Feature summaries use the same four-second, 50%-overlap windows as training. Baseline comparisons show absolute and relative feature changes, not disease risk or severity. The experimental repeated-session flag requires the configured number of valid sessions (default 3 of the last 5) to cross the same fixed-baseline z-threshold (default 2.0); configure with `NEUROWATCH_CHANGE_MIN_SESSIONS`, `NEUROWATCH_CHANGE_LOOKBACK_SESSIONS`, and `NEUROWATCH_CHANGE_Z_THRESHOLD`. Thresholds are exploratory and not clinically validated. Persistent changes are not evidence of Parkinson's progression; review concerning changes with a clinician.
+
+Run the ML and application tests with:
+
+```powershell
+.\.venv311\Scripts\python.exe -m pytest
+```
+
 ### Tests
 
 Run the API, profile, calibration, persistence, comparison, and export tests with:

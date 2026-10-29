@@ -3,3 +3,6 @@ uvicorn[standard]
 httpx
 pytest
 reportlab
+numpy
+scikit-learn
+joblib
