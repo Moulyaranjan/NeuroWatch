@@ -1,24 +1,46 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 import math
+import re
+import time
 from collections import defaultdict, deque
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from threading import Lock
 from typing import Any, Deque, Dict, List, Optional
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError, field_validator
+from starlette.requests import Request
+from movement import AXES, ProfileStore
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    Flowable,
+    Paragraph,
+    SimpleDocTemplate,
+    Spacer,
+    Table,
+    TableStyle,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 SESSIONS_DIR = DATA_DIR / "sessions"
 EXPORTS_DIR = DATA_DIR / "exports"
 SESSION_FILE = SESSIONS_DIR / "session_store.json"
+PROFILE_FILE = DATA_DIR / "profiles" / "profiles.json"
 
 SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
 EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -37,6 +59,11 @@ def iso_timestamp(value: Optional[datetime] = None) -> str:
     return dt.astimezone(timezone.utc).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
+def iso_timestamp_precise(value: Optional[datetime] = None) -> str:
+    dt = value or utc_now()
+    return dt.astimezone(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
+
 class SensorPayload(BaseModel):
     sensor: str = Field(..., min_length=2)
     source: str = "real"
@@ -49,6 +76,7 @@ class SensorPayload(BaseModel):
     activity: Optional[str] = None
     sequence_number: Optional[int] = Field(default=None, ge=0)
     sensor_freshness_ms: Optional[float] = Field(default=None, gt=0)
+    temperature_c: Optional[float] = None
 
     @field_validator("source")
     @classmethod
@@ -81,6 +109,8 @@ class SensorPayload(BaseModel):
                 numeric = float(value)
             except (TypeError, ValueError):
                 raise ValueError(f"Sensor value for '{key}' must be numeric") from None
+            if not math.isfinite(numeric):
+                raise ValueError(f"Sensor value for '{key}' must be finite")
             cleaned[key] = numeric
 
         sensor_keys = {"ax", "ay", "az", "gx", "gy", "gz"}
@@ -88,6 +118,30 @@ class SensorPayload(BaseModel):
             missing = sorted(sensor_keys - cleaned.keys())
             raise ValueError(f"Incomplete IMU payload. Missing axes: {missing}")
         return cleaned
+
+
+    @field_validator("temperature_c", "sensor_freshness_ms")
+    @classmethod
+    def validate_finite_optional_values(cls, value: Optional[float]) -> Optional[float]:
+        if value is not None and not math.isfinite(value):
+            raise ValueError("Optional sensor values must be finite")
+        return value
+
+
+class ProfileCreate(BaseModel):
+    display_name: str = Field(..., min_length=1, max_length=80)
+    profile_id: Optional[str] = Field(default=None, max_length=40)
+
+
+class CalibrationStart(BaseModel):
+    duration_seconds: int = Field(default=120, ge=120, le=180)
+
+    @field_validator("duration_seconds")
+    @classmethod
+    def validate_duration(cls, value: int) -> int:
+        if value not in (120, 150, 180):
+            raise ValueError("duration_seconds must be 120, 150, or 180")
+        return value
 
 
 class SessionStore:
@@ -104,11 +158,6 @@ class SessionStore:
         self.events = []
         self.current_session_id = None
         self.sequence_numbers = {}
-        if SESSION_FILE.exists():
-            try:
-                SESSION_FILE.unlink()
-            except OSError:
-                pass
 
     def _save(self) -> None:
         SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -120,8 +169,11 @@ class SessionStore:
             self.current_session_id = f"session-{iso_timestamp().replace(':', '').replace('-', '').replace('Z', '')}"
         return self.current_session_id
 
-    def add_event(self, payload: Dict[str, Any]) -> Dict[str, Any]:
-        session_id = self.ensure_session()
+    def add_event(
+        self,
+        payload: Dict[str, Any],
+        profile_context: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
         sensor_name = payload.get("sensor", "unknown")
         sequence_number = payload.get("sequence_number")
         if sequence_number is not None:
@@ -131,8 +183,9 @@ class SessionStore:
             self.sequence_numbers[sensor_name] = int(sequence_number)
 
         event = {
-            "session_id": session_id,
+            "session_id": profile_context["context_id"] if profile_context else self.ensure_session(),
             "timestamp": payload.get("timestamp") or iso_timestamp(),
+            "received_at": iso_timestamp_precise(),
             "sensor": sensor_name,
             "source": payload.get("source", "real"),
             "values": payload.get("values", {}),
@@ -143,15 +196,24 @@ class SessionStore:
             "activity": payload.get("activity"),
             "sequence_number": sequence_number,
             "sensor_freshness_ms": payload.get("sensor_freshness_ms"),
+            "temperature_c": payload.get("temperature_c"),
         }
-        self.events.append(event)
-        self._save()
+        if profile_context is not None:
+            event.update({
+                "profile_id": profile_context["profile_id"],
+                "profile_context_id": profile_context["context_id"],
+                "profile_context_type": profile_context["context_type"],
+            })
+        if profile_context is None:
+            self.events.append(event)
+            self._save()
         return event
 
     def export_csv(self) -> Path:
         export_path = EXPORTS_DIR / f"session_export_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
         fieldnames = [
             "timestamp",
+            "received_at",
             "session_id",
             "sensor",
             "source",
@@ -165,9 +227,12 @@ class SessionStore:
             writer = csv.DictWriter(handle, fieldnames=fieldnames)
             writer.writeheader()
             for event in self.events:
+                if event.get("profile_id") is not None:
+                    continue
                 writer.writerow(
                     {
                         "timestamp": event.get("timestamp", ""),
+                        "received_at": event.get("received_at", ""),
                         "session_id": event.get("session_id", ""),
                         "sensor": event.get("sensor", ""),
                         "source": event.get("source", ""),
@@ -185,6 +250,20 @@ class SessionStore:
 
 
 store = SessionStore()
+profile_store = ProfileStore(PROFILE_FILE)
+_sensor_diagnostics_lock = Lock()
+_sensor_diagnostics: Dict[str, Any] = {
+    "invalid_packet_count": 0,
+    "last_invalid_at": None,
+    "last_invalid_reason": None,
+}
+
+
+def _record_invalid_sensor_packet(reason: str) -> None:
+    with _sensor_diagnostics_lock:
+        _sensor_diagnostics["invalid_packet_count"] += 1
+        _sensor_diagnostics["last_invalid_at"] = iso_timestamp()
+        _sensor_diagnostics["last_invalid_reason"] = reason
 
 
 class ConnectionManager:
@@ -208,6 +287,348 @@ class ConnectionManager:
 
 
 manager = ConnectionManager()
+
+
+class ReportChart(Flowable):
+    def __init__(
+        self,
+        title: str,
+        unit: str,
+        samples: List[Dict[str, Any]],
+        series: List[Dict[str, Any]],
+    ) -> None:
+        super().__init__()
+        self.title = title
+        self.unit = unit
+        self.samples = samples
+        self.series = series
+        self.width = 178 * mm
+        self.height = 65 * mm
+
+    def wrap(self, available_width: float, available_height: float) -> tuple[float, float]:
+        self.width = min(self.width, available_width)
+        return self.width, self.height
+
+    def draw(self) -> None:
+        canvas = self.canv
+        left, right, bottom, top = 43, self.width - 8, 24, self.height - 19
+        canvas.setFillColor(colors.HexColor("#18314b"))
+        canvas.setFont("Helvetica-Bold", 9)
+        canvas.drawString(0, self.height - 10, self.title)
+        observed = [
+            float(sample["values"][entry["axis"]])
+            if entry.get("axis")
+            else math.sqrt(sum(float(sample["values"][axis]) ** 2 for axis in entry["axes"]))
+            for entry in self.series
+            for sample in self.samples
+        ]
+        reference_values = [
+            value
+            for entry in self.series
+            for value in (
+                entry["reference"]["mean"] - entry["reference"]["standard_deviation"],
+                entry["reference"]["mean"] + entry["reference"]["standard_deviation"],
+            )
+        ]
+        if not observed:
+            canvas.setFillColor(colors.grey)
+            canvas.setFont("Helvetica", 9)
+            canvas.drawCentredString(self.width / 2, self.height / 2, "No eligible session readings were recorded.")
+            return
+        low = min(observed + reference_values)
+        high = max(observed + reference_values)
+        if high - low < 1e-9:
+            margin = max(abs(high) * 0.05, 0.5)
+        else:
+            margin = (high - low) * 0.12
+        low -= margin
+        high += margin
+        plot_width, plot_height = right - left, top - bottom
+
+        def y(value: float) -> float:
+            return bottom + (value - low) * plot_height / (high - low)
+
+        canvas.setStrokeColor(colors.HexColor("#dbe5ef"))
+        canvas.setLineWidth(0.5)
+        canvas.line(left, bottom, left, top)
+        canvas.line(left, bottom, right, bottom)
+        canvas.setFont("Helvetica", 7)
+        for tick in range(5):
+            value = high - (high - low) * tick / 4
+            y_pos = bottom + plot_height * tick / 4
+            canvas.setStrokeColor(colors.HexColor("#d8e0e8"))
+            canvas.line(left, y_pos, right, y_pos)
+            canvas.setFillColor(colors.HexColor("#425466"))
+            canvas.drawRightString(left - 4, y_pos - 2, f"{value:.2f}")
+        canvas.saveState()
+        canvas.translate(8, bottom + plot_height / 2)
+        canvas.rotate(90)
+        canvas.setFillColor(colors.HexColor("#425466"))
+        canvas.drawCentredString(0, 0, self.unit)
+        canvas.restoreState()
+
+        palette = [
+            colors.HexColor("#0c8b7b"),
+            colors.HexColor("#3478c8"),
+            colors.HexColor("#8052b6"),
+        ]
+        for index, entry in enumerate(self.series):
+            color = palette[index % len(palette)]
+            reference = entry["reference"]
+            canvas.setFillColor(colors.Color(color.red, color.green, color.blue, alpha=0.12))
+            band_bottom = y(reference["mean"] - reference["standard_deviation"])
+            band_top = y(reference["mean"] + reference["standard_deviation"])
+            canvas.rect(left, band_bottom, plot_width, max(1, band_top - band_bottom), fill=1, stroke=0)
+            canvas.setStrokeColor(color)
+            canvas.setDash(3, 2)
+            canvas.setLineWidth(0.8)
+            canvas.line(left, y(reference["mean"]), right, y(reference["mean"]))
+            canvas.setDash()
+            points: List[tuple[float, float]] = []
+            sample_times = [
+                _report_timestamp(sample.get("sensor_timestamp") or sample.get("timestamp"))
+                for sample in self.samples
+            ]
+            first_time = min(sample_times) if sample_times else 0.0
+            last_time = max(sample_times) if sample_times else first_time
+            for sample_index, sample in enumerate(self.samples):
+                if entry.get("axis"):
+                    value = float(sample["values"][entry["axis"]])
+                else:
+                    value = math.sqrt(sum(float(sample["values"][axis]) ** 2 for axis in entry["axes"]))
+                if last_time > first_time:
+                    x_pos = left + plot_width * (sample_times[sample_index] - first_time) / (last_time - first_time)
+                else:
+                    x_pos = left + plot_width * sample_index / max(1, len(self.samples) - 1)
+                points.append((x_pos, y(value)))
+            if len(points) > 1:
+                path = canvas.beginPath()
+                path.moveTo(*points[0])
+                for point in points[1:]:
+                    path.lineTo(*point)
+                canvas.setStrokeColor(color)
+                canvas.setLineWidth(1)
+                canvas.drawPath(path, stroke=1, fill=0)
+            canvas.setFillColor(color)
+            canvas.setFont("Helvetica", 7)
+            legend_x = 120 + index * 100
+            canvas.drawString(legend_x, self.height - 10, f"{entry['label']} session / baseline")
+        if self.samples:
+            canvas.setFillColor(colors.HexColor("#425466"))
+            canvas.setFont("Helvetica", 6)
+            canvas.drawString(left, 9, str(self.samples[0].get("sensor_timestamp") or self.samples[0].get("timestamp", "")))
+            canvas.drawRightString(right, 9, str(self.samples[-1].get("sensor_timestamp") or self.samples[-1].get("timestamp", "")))
+
+
+def _report_timestamp(value: Optional[str]) -> float:
+    if not value:
+        return 0.0
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return 0.0
+
+
+def build_session_pdf(report: Dict[str, Any]) -> bytes:
+    output = io.BytesIO()
+    document = SimpleDocTemplate(
+        output,
+        pagesize=A4,
+        rightMargin=15 * mm,
+        leftMargin=15 * mm,
+        topMargin=15 * mm,
+        bottomMargin=15 * mm,
+        title=f"NeuroWatch Session Report {report['session']['session_id']}",
+    )
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(name="ReportTitle", parent=styles["Title"], alignment=TA_CENTER, textColor=colors.HexColor("#113b52")))
+    styles.add(ParagraphStyle(name="SmallNote", parent=styles["BodyText"], fontSize=8, leading=10))
+    story: List[Flowable] = [
+        Paragraph("NeuroWatch Session Report", styles["ReportTitle"]),
+        Paragraph(f"Generated {iso_timestamp()}", styles["BodyText"]),
+        Spacer(1, 5 * mm),
+    ]
+
+    def section(title: str) -> None:
+        story.extend([Spacer(1, 3 * mm), Paragraph(title, styles["Heading2"]), Spacer(1, 2 * mm)])
+
+    def table(rows: List[List[Any]], widths: List[float]) -> None:
+        rendered = [[Paragraph(str(cell), styles["SmallNote"]) for cell in row] for row in rows]
+        item = Table(rendered, colWidths=widths, repeatRows=1, hAlign="LEFT")
+        item.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#dce8f1")),
+            ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#10283d")),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#aab8c5")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 4),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+            ("TOPPADDING", (0, 0), (-1, -1), 4),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ]))
+        story.append(item)
+
+    profile, session, baseline = report["profile"], report["session"], report["baseline"]
+    section("Profile and session")
+    table([
+        ["Field", "Value"],
+        ["Profile", f"{profile['display_name']} ({profile['profile_id']})"],
+        ["Session ID", session["session_id"]],
+        ["Session start / end", f"{session['started_at']} / {session['ended_at']}"],
+        ["Duration", f"{session['duration_seconds']} seconds"],
+        ["Baseline calibration", f"{baseline['calibration_id']} · calibrated {baseline['calibrated_at']}"],
+        ["Baseline completed", baseline["completed_at"]],
+    ], [42 * mm, 138 * mm])
+
+    section("Session quality and packet statistics")
+    counts = report["packet_counts"]
+    table([
+        ["Received", "Accepted", "Rejected", "Effective rate", "Quality"],
+        [counts["received"], counts["accepted"], counts["rejected"],
+         f"{report['effective_sample_rate_hz']:.3f} Hz" if report["effective_sample_rate_hz"] is not None else "Unavailable",
+         report["quality"].get("status", "unavailable")],
+    ], [30 * mm, 30 * mm, 30 * mm, 42 * mm, 48 * mm])
+
+    section("Baseline versus session axis statistics")
+    rows = [["Axis", "Unit", "Baseline mean ± SD", "Baseline min – max", "Session mean ± SD", "Session min – max", "Abs. diff", "Diff %", "z diff"]]
+    for axis in AXES:
+        reference = baseline["axes"][axis]
+        measured = report["statistics"]["axes"].get(axis)
+        comparison = report["comparisons"]["axes"][axis]
+        unit = comparison["unit"] if report["units_verified"] else "unit unverified"
+        rows.append([
+            axis.upper(), unit,
+            f"{reference['mean']:.4g} ± {reference['standard_deviation']:.3g}",
+            f"{reference['minimum']:.4g} – {reference['maximum']:.4g}",
+            f"{measured['mean']:.4g} ± {measured['standard_deviation']:.3g}" if measured else "Unavailable",
+            f"{measured['minimum']:.4g} – {measured['maximum']:.4g}" if measured else "Unavailable",
+            f"{comparison['absolute_difference']:.4g}" if comparison.get("absolute_difference") is not None else "Unavailable",
+            f"{comparison['percentage_difference']:.2f}%" if comparison.get("percentage_difference") is not None else "Unavailable",
+            f"{comparison['standardized_deviation']:.3g}" if comparison.get("standardized_deviation") is not None else "Unavailable",
+        ])
+    table(rows, [10 * mm, 14 * mm, 25 * mm, 20 * mm, 25 * mm, 20 * mm, 20 * mm, 18 * mm, 18 * mm])
+
+    section("Acceleration and gyroscope time series")
+    samples = report["samples"]
+    for group, axes, unit in (
+        ("Acceleration", ("ax", "ay", "az"), "m/s^2" if report["units_verified"] else "unit unverified"),
+        ("Gyroscope", ("gx", "gy", "gz"), "deg/s" if report["units_verified"] else "unit unverified"),
+    ):
+        chart_series = [
+            {"axis": axis, "label": axis.upper(), "reference": baseline["axes"][axis]}
+            for axis in axes
+        ]
+        story.append(ReportChart(group, unit, samples, chart_series))
+        story.append(Spacer(1, 3 * mm))
+
+    section("Movement magnitude statistics and deviations")
+    rows = [["Feature · unit", "Baseline mean ± SD", "Baseline min–max · range", "Session mean ± SD", "Session min–max · range", "Abs. diff", "Diff %", "z diff"]]
+    for name, label in (("acceleration_magnitude", "Acceleration magnitude"), ("gyroscope_magnitude", "Gyroscope magnitude")):
+        comparison = report["comparisons"]["magnitudes"][name]
+        reference, measured = comparison["baseline"], comparison["session"]
+        rows.append([
+            f"{label} · {reference['unit'] if report['units_verified'] else 'unit unverified'}",
+            f"{reference['mean']:.4g} ± {reference['standard_deviation']:.3g}",
+            f"{reference['minimum']:.4g}–{reference['maximum']:.4g} · {reference['range']:.4g}",
+            f"{measured['mean']:.4g} ± {measured['standard_deviation']:.3g}" if measured else "Unavailable",
+            f"{measured['minimum']:.4g}–{measured['maximum']:.4g} · {measured['range']:.4g}" if measured else "Unavailable",
+            f"{comparison['absolute_difference']:.4g}" if comparison.get("absolute_difference") is not None else "Unavailable",
+            f"{comparison['percentage_difference']:.2f}%" if comparison.get("percentage_difference") is not None else "Unavailable",
+            f"{comparison['standardized_deviation']:.3g}" if comparison.get("standardized_deviation") is not None else "Unavailable",
+        ])
+    table(rows, [26 * mm, 25 * mm, 29 * mm, 25 * mm, 29 * mm, 18 * mm, 16 * mm, 12 * mm])
+    for name, axes, unit in (
+        ("Acceleration magnitude", ("ax", "ay", "az"), "m/s^2" if report["units_verified"] else "unit unverified"),
+        ("Gyroscope magnitude", ("gx", "gy", "gz"), "deg/s" if report["units_verified"] else "unit unverified"),
+    ):
+        reference = baseline["features"][("acceleration_magnitude" if axes[0] == "ax" else "gyroscope_magnitude")]
+        story.append(ReportChart(
+            name,
+            unit,
+            samples,
+            [{"axes": axes, "label": "Magnitude", "reference": reference}],
+        ))
+
+    section("Largest standardized differences")
+    if report["insights"]:
+        table(
+            [["Axis", "Absolute difference", "Standardized difference", "Unit"]]
+            + [[entry["feature"].upper(), f"{entry['absolute_difference']:.4g}",
+                f"{entry['standardized_deviation']:.3g}", entry["unit"]]
+               for entry in report["insights"]],
+            [45 * mm, 45 * mm, 50 * mm, 40 * mm],
+        )
+    else:
+        story.append(Paragraph("No axis standardized differences are available.", styles["BodyText"]))
+    if report["fallback_insights"]:
+        table(
+            [["Axis", "Absolute difference", "Percentage difference", "Interpretation"]]
+            + [[entry["feature"].upper(), f"{entry['absolute_difference']:.4g} {entry['unit']}",
+                f"{entry['percentage_difference']:.2f}%" if entry["percentage_difference"] is not None else "Unavailable",
+                "Standardized difference unavailable because baseline SD is near zero."]
+               for entry in report["fallback_insights"]],
+            [20 * mm, 36 * mm, 37 * mm, 87 * mm],
+        )
+
+    section("Variability changes")
+    variability_rows = [["Feature", "Baseline SD", "Session SD", "SD change", "Change %"]]
+    for axis, comparison in report["comparisons"]["axes"].items():
+        if comparison.get("variability_difference") is None:
+            continue
+        unit = comparison["unit"] if report["units_verified"] else "unit unverified"
+        variability_rows.append([
+            axis.upper(),
+            f"{comparison['baseline_standard_deviation']:.4g} {unit}",
+            f"{comparison['session_standard_deviation']:.4g} {unit}",
+            f"{comparison['variability_difference']:.4g} {unit}",
+            f"{comparison['variability_percentage_difference']:.2f}%"
+            if comparison["variability_percentage_difference"] is not None else "Unavailable",
+        ])
+    for name, comparison in report["comparisons"]["magnitudes"].items():
+        measured = comparison.get("session")
+        if measured is None:
+            continue
+        unit = comparison["baseline"]["unit"] if report["units_verified"] else "unit unverified"
+        variability_rows.append([
+            name.replace("_", " ").title(),
+            f"{comparison['baseline']['standard_deviation']:.4g} {unit}",
+            f"{measured['standard_deviation']:.4g} {unit}",
+            f"{comparison['variability_difference']:.4g} {unit}",
+            f"{comparison['variability_percentage_difference']:.2f}%"
+            if comparison["variability_percentage_difference"] is not None else "Unavailable",
+        ])
+    if len(variability_rows) > 1:
+        table(
+            variability_rows,
+            [38 * mm, 34 * mm, 34 * mm, 36 * mm, 36 * mm],
+        )
+    else:
+        story.append(Paragraph("Variability percentage changes are unavailable because baseline variability is zero or near zero.", styles["BodyText"]))
+
+    section("Detected movement-change events")
+    if report["events"]:
+        table(
+            [["Timestamp", "Severity", "Description"]]
+            + [[event.get("timestamp", ""), event.get("severity", ""), event.get("description", "")]
+               for event in report["events"]],
+            [42 * mm, 25 * mm, 113 * mm],
+        )
+    else:
+        story.append(Paragraph("No movement-change events were detected during this session.", styles["BodyText"]))
+
+    section("Limitations and interpretation")
+    limitations = report["limitations"] or ["No additional data-quality limitations were identified by the available checks."]
+    for limitation in limitations:
+        story.append(Paragraph(f"• {limitation}", styles["SmallNote"]))
+    story.extend([
+        Spacer(1, 3 * mm),
+        Paragraph(
+            "Disclaimer: These are experimental movement-analysis results based on the recorded sensor data. "
+            "They are not a medical diagnosis, clinical assessment, or a substitute for professional care.",
+            styles["SmallNote"],
+        ),
+    ])
+    document.build(story)
+    return output.getvalue()
 
 
 def calculate_magnitude(values: Dict[str, float]) -> float:
@@ -342,7 +763,7 @@ def evaluate_signal_quality(history: List[Dict[str, Any]]) -> Dict[str, Any]:
                 metrics["sequence_gaps"] += 1
             last_sequence = sequence_value
 
-        timestamp_value = event.get("timestamp")
+        timestamp_value = event.get("received_at") or event.get("timestamp")
         if timestamp_value:
             try:
                 parsed = datetime.fromisoformat(timestamp_value.replace("Z", "+00:00"))
@@ -570,18 +991,57 @@ def evaluate_research_metrics(history: List[Dict[str, Any]]) -> Dict[str, Any]:
     }
 
 
-def build_dashboard_payload() -> Dict[str, Any]:
-    history = store.history(limit=50)
+def build_dashboard_payload(profile_id: Optional[str] = None) -> Dict[str, Any]:
+    profile_state = profile_store.dashboard_state(profile_id)
+    selected_profile = profile_state["selected_profile"]
+    profile_samples = profile_state["profile_samples"]
+    if selected_profile and profile_samples:
+        history = [
+            {
+                "session_id": sample["session_id"],
+                "profile_id": sample["profile_id"],
+                "timestamp": sample.get("sensor_timestamp") or sample["timestamp"],
+                "received_at": sample["timestamp"],
+                "sensor": sample.get("sensor", "unknown"),
+                "source": sample.get("source", "real"),
+                "values": sample.get("values", {}),
+                "units": sample.get("units", {}),
+                "sequence_number": sample.get("sequence_number"),
+                "sensor_freshness_ms": sample.get("sensor_freshness_ms"),
+                "temperature_c": sample.get("temperature_c"),
+            }
+            for sample in profile_samples
+        ]
+    else:
+        history = [
+            event for event in store.events
+            if event.get("profile_id") is None
+        ][-50:]
     latest_event = history[-1] if history else None
-    baseline = calculate_baseline(history)
+    saved_baseline = profile_state["baseline"]
+    baseline = {
+        axis: saved_baseline["axes"][axis]["mean"] if saved_baseline else None
+        for axis in AXES
+    }
     step_count = latest_event.get("step_count") if latest_event else 0
     cadence = latest_event.get("cadence") if latest_event else 0.0
     heart_rate = latest_event.get("heart_rate") if latest_event else None
     activity = latest_event.get("activity") if latest_event else "Waiting"
 
     source = latest_event.get("source") if latest_event else "unavailable"
+    latest_sensor_age = None
+    if latest_event and latest_event.get("timestamp"):
+        try:
+            latest_sensor_age = (
+                utc_now()
+                - datetime.fromisoformat(latest_event["timestamp"].replace("Z", "+00:00")).astimezone(timezone.utc)
+            ).total_seconds()
+        except ValueError:
+            latest_sensor_age = None
     if not latest_event:
         sensor_state = "waiting_for_data"
+    elif latest_sensor_age is not None and latest_sensor_age > 10:
+        sensor_state = "stale_data"
     elif source == "real":
         sensor_state = "real_data"
     elif source == "uncalibrated":
@@ -592,27 +1052,117 @@ def build_dashboard_payload() -> Dict[str, Any]:
         sensor_state = "waiting_for_data"
 
     signal_quality = evaluate_signal_quality(history)
-    movement_intelligence = compute_q_change(history, signal_quality)
-    cusum = compute_standard_cusum(history, baseline)
+    comparison = profile_state["comparison"]
+    comparison_available = bool(comparison and comparison.get("features"))
+    comparison_state = (
+        comparison.get("state")
+        if comparison
+        else ("uncalibrated" if not saved_baseline else "insufficient_data")
+    )
+    legacy_states = {
+        "review": "candidate_change",
+        "marked deviation": "confirmed_change",
+        "poor_signal_quality": "uncertain",
+        "insufficient_data": "uncertain",
+        "uncalibrated": "uncalibrated",
+    }
+    movement_state = legacy_states.get(comparison_state, comparison_state)
+    deviations = comparison.get("feature_deviations_z", {}) if comparison else {}
+    reference_deviation = max((abs(value) for value in deviations.values()), default=None)
+    sustained = bool(comparison and comparison.get("sustained"))
+    movement_intelligence = {
+        "implemented": True,
+        "available": comparison_available,
+        "state": movement_state,
+        "score": comparison.get("score") if comparison else None,
+        "reference_deviation": reference_deviation,
+        "persistence_duration": 3 if sustained else 0,
+        "signal_quality_status": comparison.get("signal_quality", {}).get("status", "insufficient_data") if comparison else "insufficient_data",
+        "summary": comparison.get(
+            "interpretation",
+            "Select a profile with a completed calibration to compare movement against its fixed saved baseline.",
+        ) if comparison else "Select a profile with a completed calibration to compare movement against its fixed saved baseline.",
+    }
+    cusum = {
+        "implemented": True,
+        "available": comparison_available,
+        "state": movement_state,
+        "score": movement_intelligence["score"],
+        "reference_deviation": reference_deviation,
+        "summary": "Legacy field retained for compatibility; use profile_state.comparison for fixed-baseline results.",
+    }
     research_metrics = evaluate_research_metrics(history)
+    alerts = (
+        [comparison.get("interpretation", "Experimental movement comparison available.")]
+        if comparison_available
+        else ["No selected calibrated profile; movement comparison is unavailable."]
+    )
+    temperature_records = []
+    for event in history:
+        temperature = event.get("temperature_c")
+        if temperature is None:
+            temperature = (event.get("values") or {}).get("temperature_c")
+        try:
+            numeric_temperature = float(temperature)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(numeric_temperature):
+            temperature_records.append({
+                "timestamp": event.get("received_at") or event.get("timestamp"),
+                "sensor_timestamp": event.get("timestamp"),
+                "temperature_c": numeric_temperature,
+            })
+    temperature_state = "absent"
+    latest_reading = temperature_records[-1] if temperature_records else None
+    latest_temperature = latest_reading["temperature_c"] if latest_reading else None
+    temperatures = [
+        reading for reading in temperature_records
+        if -40 <= reading["temperature_c"] <= 125
+    ]
+    if latest_temperature is not None:
+        temperature_state = "available" if -40 <= latest_temperature <= 125 else "implausible"
+        if temperature_state == "implausible":
+            latest_temperature = None
+        elif latest_reading and latest_reading.get("timestamp"):
+            try:
+                sensor_timestamp = latest_reading.get("sensor_timestamp") or latest_reading["timestamp"]
+                temperature_age = (utc_now() - datetime.fromisoformat(sensor_timestamp.replace("Z", "+00:00")).astimezone(timezone.utc)).total_seconds()
+            except ValueError:
+                temperature_age = None
+            if temperature_age is not None and temperature_age > MAX_SENSOR_AGE_SECONDS:
+                temperature_state = "stale"
+                latest_temperature = None
 
     return {
         "status": "ok",
         "sensor_state": sensor_state,
-        "connection_status": "Connected" if latest_event else "Waiting",
+        "connection_status": "Stale data" if latest_sensor_age is not None and latest_sensor_age > 10 else "Connected" if latest_event else "Waiting",
         "data_source": source,
         "last_updated": latest_event.get("timestamp") if latest_event else iso_timestamp(),
+        "last_received_at": latest_event.get("received_at") if latest_event else None,
         "step_count": int(step_count or 0),
         "cadence": float(cadence or 0.0),
         "heart_rate": None if heart_rate is None else float(heart_rate),
         "activity": activity,
         "baseline": baseline,
-        "alerts": build_alert_messages(latest_event, baseline),
+        "alerts": alerts,
         "history": history,
         "signal_quality": signal_quality,
         "movement_intelligence": movement_intelligence,
         "cusum": cusum,
         "research_metrics": research_metrics,
+        "profile_state": profile_state,
+        "sensor_temperature": {
+            "state": temperature_state,
+            "temperature_c": latest_temperature,
+            "history": temperatures[-50:],
+            "implausible_count": sum(
+                not (-40 <= reading["temperature_c"] <= 125)
+                for reading in temperature_records
+            ),
+            "label": "Sensor/chip temperature, not body temperature.",
+        },
+        "sensor_diagnostics": dict(_sensor_diagnostics),
     }
 
 
@@ -621,6 +1171,22 @@ app = FastAPI(
     description="Drift-aware movement monitoring dashboard and real sensor ingestion API.",
     version="0.1.0",
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_response(request: Request, exc: RequestValidationError) -> JSONResponse:
+    if request.url.path == "/api/sensor/ingest":
+        _record_invalid_sensor_packet("Sensor packet failed request validation.")
+    errors = [
+        {
+            "loc": list(error.get("loc", ())),
+            "msg": error.get("msg", "Invalid request."),
+            "type": error.get("type", "value_error"),
+        }
+        for error in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": errors})
+
 
 app.add_middleware(
     CORSMiddleware,
@@ -638,6 +1204,15 @@ async def index() -> FileResponse:
     return FileResponse(BASE_DIR / "templates" / "index.html")
 
 
+@app.get("/session-report/{session_id}")
+async def session_report_page(session_id: str) -> Response:
+    try:
+        profile_store.completed_session(session_id)
+    except KeyError:
+        return RedirectResponse("/", status_code=303)
+    return FileResponse(BASE_DIR / "templates" / "index.html")
+
+
 @app.get("/api/health")
 async def health() -> Dict[str, Any]:
     return {
@@ -650,17 +1225,72 @@ async def health() -> Dict[str, Any]:
 
 
 @app.get("/api/dashboard-state")
-async def dashboard_state() -> Dict[str, Any]:
-    return build_dashboard_payload()
+async def dashboard_state(profile_id: Optional[str] = None) -> Dict[str, Any]:
+    if profile_id is not None:
+        try:
+            profile_store.profile(profile_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return build_dashboard_payload(profile_id)
 
 
 @app.get("/api/session/history")
-async def session_history() -> Dict[str, Any]:
-    return {"sessions": store.history(limit=20)}
+async def session_history(profile_id: Optional[str] = None) -> Dict[str, Any]:
+    if profile_id is not None:
+        try:
+            history = profile_store.history(profile_id)
+            history["completed_sessions"] = profile_store.completed_session_history(profile_id)
+            return history
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    unassigned_events = [
+        event for event in store.events
+        if event.get("profile_id") is None
+    ]
+    return {
+        "sessions": unassigned_events[-20:],
+        "completed_sessions": profile_store.completed_session_history(),
+    }
+
+
+@app.get("/api/session/{session_id}/analysis")
+async def session_analysis(session_id: str, profile_id: Optional[str] = None) -> Dict[str, Any]:
+    try:
+        report = profile_store.completed_session(session_id, profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    if not report.get("analysis_available", True):
+        raise HTTPException(status_code=409, detail="Saved analysis is unavailable for this completed session.")
+    return report
+
+
+@app.get("/api/session/{session_id}/report.pdf")
+async def session_report_pdf(session_id: str, profile_id: Optional[str] = None) -> Response:
+    try:
+        report = profile_store.completed_session(session_id, profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    pdf = build_session_pdf(report)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="neurowatch-{session_id}.pdf"'},
+    )
 
 
 @app.get("/api/session/export")
-async def export_session() -> FileResponse:
+async def export_session(
+    profile_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> FileResponse:
+    if profile_id is not None:
+        try:
+            content = profile_store.export_csv(profile_id, session_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        export_path = EXPORTS_DIR / f"profile_{profile_id}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+        export_path.write_text(content, encoding="utf-8")
+        return FileResponse(path=str(export_path), media_type="text/csv", filename=export_path.name)
     export_path = store.export_csv()
     return FileResponse(path=str(export_path), media_type="text/csv", filename=export_path.name)
 
@@ -673,35 +1303,187 @@ async def start_session() -> Dict[str, Any]:
 
 @app.post("/api/session/end")
 async def end_session() -> Dict[str, Any]:
+    if profile_store.monitoring is not None:
+        try:
+            report = profile_store.end_monitoring()
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        store.current_session_id = None
+        await manager.broadcast(build_dashboard_payload(report["profile"]["profile_id"]))
+        return {
+            "status": "ended",
+            "session_id": report["session"]["session_id"],
+            "profile_session": report,
+            "report": report,
+            "timestamp": iso_timestamp(),
+        }
+    if store.current_session_id is None:
+        raise HTTPException(status_code=409, detail="There is no active session to end.")
     session_id = store.current_session_id
     store.current_session_id = None
-    return {"status": "ended", "session_id": session_id, "timestamp": iso_timestamp()}
+    return {
+        "status": "ended",
+        "session_id": session_id,
+        "profile_session": None,
+        "timestamp": iso_timestamp(),
+    }
+
+
+@app.get("/api/profiles")
+async def list_profiles() -> Dict[str, Any]:
+    return {"profiles": profile_store.list_profiles()}
+
+
+@app.post("/api/profiles", status_code=201)
+async def create_profile(payload: ProfileCreate) -> Dict[str, Any]:
+    try:
+        profile = profile_store.create_profile(payload.display_name, payload.profile_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "profile_id": profile["profile_id"],
+        "display_name": profile["display_name"],
+        "created_at": profile["created_at"],
+        "baseline_available": False,
+    }
+
+
+@app.get("/api/profiles/{profile_id}")
+async def get_profile(profile_id: str) -> Dict[str, Any]:
+    try:
+        return profile_store.profile(profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.post("/api/profiles/{profile_id}/calibrations")
+async def start_calibration(profile_id: str, payload: CalibrationStart) -> Dict[str, Any]:
+    try:
+        state = profile_store.start_calibration(profile_id, payload.duration_seconds)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await manager.broadcast(build_dashboard_payload(profile_id))
+    return state
+
+
+@app.get("/api/calibration-state")
+async def get_calibration_state() -> Dict[str, Any]:
+    return profile_store.calibration_status()
+
+
+@app.delete("/api/calibration")
+async def cancel_calibration() -> Dict[str, Any]:
+    try:
+        state = profile_store.cancel_calibration()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await manager.broadcast(build_dashboard_payload(state.get("profile_id")))
+    return state
+
+
+@app.post("/api/profiles/{profile_id}/monitoring")
+async def start_monitoring(profile_id: str) -> Dict[str, Any]:
+    try:
+        state = profile_store.start_monitoring(profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await manager.broadcast(build_dashboard_payload(profile_id))
+    return state
+
+
+@app.post("/api/monitoring/end")
+async def end_monitoring() -> Dict[str, Any]:
+    try:
+        report = profile_store.end_monitoring()
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    await manager.broadcast(build_dashboard_payload(report["profile"]["profile_id"]))
+    return report
+
+
+@app.get("/api/profiles/{profile_id}/history")
+async def profile_history(profile_id: str) -> Dict[str, Any]:
+    try:
+        return profile_store.history(profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
+@app.get("/api/profiles/{profile_id}/trends")
+async def profile_trends(profile_id: str) -> Dict[str, Any]:
+    try:
+        profile = profile_store.profile(profile_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"profile_id": profile_id, "sessions": profile_store._trends(profile)}
 
 
 @app.post("/api/sensor/ingest")
 async def ingest_sensor(payload: SensorPayload) -> Dict[str, Any]:
     if payload.source == "simulated" and not SIMULATOR_ENABLED:
+        _record_invalid_sensor_packet("Simulation mode is disabled.")
         raise HTTPException(status_code=403, detail="Simulation mode is disabled by default.")
 
+    sensor_age_seconds = None
     if payload.timestamp is not None:
         try:
             timestamp = datetime.fromisoformat(payload.timestamp.replace("Z", "+00:00"))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail="timestamp must be ISO-8601") from exc
         age = (utc_now() - timestamp.astimezone(timezone.utc)).total_seconds()
+        sensor_age_seconds = age
         if age > MAX_SENSOR_AGE_SECONDS:
+            _record_invalid_sensor_packet("Sensor packet timestamp exceeded the freshness limit.")
             raise HTTPException(status_code=400, detail="Sensor data is stale; timestamp exceeds the freshness limit.")
+        if age < -5:
+            _record_invalid_sensor_packet("Sensor packet timestamp was too far in the future.")
+            raise HTTPException(status_code=400, detail="Sensor timestamp is too far in the future.")
 
     if payload.sensor_freshness_ms is not None and payload.sensor_freshness_ms > 10000:
+        _record_invalid_sensor_packet("Sensor-reported freshness exceeded the limit.")
         raise HTTPException(status_code=400, detail="Sensor freshness is too old for the current session.")
 
     sanitized_payload = payload.model_dump(exclude_none=True)
+    values = sanitized_payload.get("values", {})
+    if payload.temperature_c is not None:
+        sanitized_payload["temperature_c"] = payload.temperature_c
+    elif "temperature_c" in values:
+        sanitized_payload["temperature_c"] = values["temperature_c"]
     if "timestamp" not in sanitized_payload:
         sanitized_payload["timestamp"] = iso_timestamp()
     try:
-        record = store.add_event(sanitized_payload)
+        record = store.add_event(sanitized_payload, profile_store.packet_context())
     except ValueError as exc:
+        _record_invalid_sensor_packet(str(exc))
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    expected_accel = {"m/s^2", "m/s²"}
+    expected_gyro = {"deg/s", "°/s"}
+    axes_valid = all(axis in payload.values and math.isfinite(payload.values[axis]) for axis in AXES)
+    units_valid = all(payload.units.get(axis) in expected_accel for axis in ("ax", "ay", "az")) and all(
+        payload.units.get(axis) in expected_gyro for axis in ("gx", "gy", "gz")
+    )
+    freshness_valid = (
+        sensor_age_seconds is not None
+        and -5 <= sensor_age_seconds <= 3
+        and (payload.sensor_freshness_ms is None or payload.sensor_freshness_ms <= 3000)
+    )
+    eligible = payload.source == "real" and axes_valid and units_valid and freshness_valid
+    reason = None
+    if payload.source != "real":
+        reason = "Calibration requires source='real'."
+    elif not axes_valid:
+        reason = "Calibration requires finite values for all six IMU axes."
+    elif not units_valid:
+        reason = "Calibration requires explicit units: acceleration in m/s^2 and gyroscope in deg/s."
+    elif not freshness_valid:
+        reason = "Calibration requires a current sensor timestamp and freshness metadata."
+    received_at = datetime.fromisoformat(record["received_at"].replace("Z", "+00:00"))
+    profile_store.record_packet(record, received_at, time.monotonic(), eligible, reason)
 
     dashboard_payload = build_dashboard_payload()
     await manager.broadcast(dashboard_payload)

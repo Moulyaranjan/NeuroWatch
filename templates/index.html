@@ -8,79 +8,117 @@
 
 <style>
 :root {
-  color-scheme: dark;
-  --bg: #07111f;
-  --panel: #0e1e31;
-  --line: #203650;
-  --text: #eaf3ff;
-  --muted: #91a7c1;
-  --teal: #5de1cb;
-  --blue: #80aaff;
-  --purple: #c09aff;
+  color-scheme: light;
+  --bg: #f5f8fc;
+  --panel: #ffffff;
+  --line: #dfe7f0;
+  --text: #243247;
+  --muted: #65758b;
+  --blue: #2878d0;
+  --teal: #16a6a1;
+  --green: #239b70;
+  --amber: #d99420;
+  --coral: #d9535f;
+  --purple: #8b65cc;
+  --shadow: 0 3px 14px rgba(36, 50, 71, .06);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  background: radial-gradient(ellipse at 70% 0%, #142945, transparent 45%), var(--bg);
+  background: var(--bg);
   color: var(--text);
-  font: 14px Arial, sans-serif;
+  font: 14px "Segoe UI", Arial, sans-serif;
+  line-height: 1.5;
 }
 .layout { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: 100vh; }
-.sidebar { padding: 25px 17px; background: #081321; border-right: 1px solid var(--line); }
-.brand { font-size: 20px; font-weight: bold; margin-bottom: 35px; }
+.sidebar { padding: 25px 17px; background: #edf4fb; border-right: 1px solid var(--line); }
+.brand { color: #1d4168; font-size: 20px; font-weight: 700; margin-bottom: 35px; }
 .brand small { display: block; color: var(--muted); font-size: 11px; margin-top: 7px; }
-.label { color: #83a8d0; font-size: 10px; font-weight: bold; letter-spacing: 2px; }
-.connection { padding: 14px; margin-top: 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; }
+.label { color: #4a6f98; font-size: 10px; font-weight: 700; letter-spacing: 1.2px; }
+.connection { padding: 14px; margin-top: 12px; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); }
 .connection small { display: block; color: var(--muted); margin-top: 8px; }
 .note { color: var(--muted); font-size: 11px; line-height: 1.7; margin-top: 20px; }
-.sidebar footer { margin-top: 60px; color: #7188a3; font-size: 10px; line-height: 1.8; }
+.sidebar footer { margin-top: 60px; color: #65758b; font-size: 10px; line-height: 1.8; }
 main { padding: 30px; max-width: 1700px; width: 100%; margin: auto; min-width: 0; }
 header { display: flex; justify-content: space-between; align-items: start; gap: 15px; margin-bottom: 25px; }
-h1 { font-size: clamp(27px, 3vw, 39px); letter-spacing: -1px; margin: 8px 0; }
-h2 { font-size: 19px; margin: 0; }
+h1 { color: #1f3550; font-size: clamp(27px, 3vw, 35px); letter-spacing: -.5px; margin: 8px 0; }
+h2 { color: #263d58; font-size: 19px; margin: 0; }
 .subtitle { color: var(--muted); }
-.chip, .button { display: inline-block; border: 1px solid var(--line); border-radius: 20px; padding: 9px 12px; color: var(--muted); font-size: 11px; font-weight: bold; text-decoration: none; }
+.chip, .button { display: inline-block; border: 1px solid var(--line); border-radius: 20px; padding: 8px 12px; color: #42566f; background: #f7faff; font-size: 11px; font-weight: 700; text-decoration: none; }
 .button { border-radius: 9px; background: var(--panel); color: var(--text); }
-.status { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border: 1px solid var(--line); background: var(--panel); border-radius: 13px; margin-bottom: 28px; }
+.status { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); border: 1px solid var(--line); background: var(--panel); border-radius: 13px; margin-bottom: 28px; box-shadow: var(--shadow); }
 .status > div { padding: 16px; border-right: 1px solid var(--line); min-width: 0; }
 .status > div:last-child { border: 0; }
-.status span { display: block; font-size: 9px; color: var(--muted); letter-spacing: 1px; margin-bottom: 8px; }
+.status span { display: block; font-size: 9px; color: #65758b; font-weight: 700; letter-spacing: .8px; margin-bottom: 8px; }
 .status b { font-size: 12px; overflow-wrap: anywhere; }
 .section { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-bottom: 13px; }
 .axes { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 11px; }
-.axis, .panel { border: 1px solid var(--line); background: linear-gradient(145deg, #102239, #0b1828); border-radius: 14px; padding: 16px; min-width: 0; }
-.axis .axis-label { color: var(--muted); font-size: 9px; font-weight: bold; }
+.axis, .panel { border: 1px solid var(--line); background: #fff; border-radius: 13px; padding: 17px; min-width: 0; box-shadow: var(--shadow); }
+.axis .axis-label { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: .35px; }
 .axis strong { display: block; font-size: clamp(20px,2vw,28px); margin: 18px 0 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .axis small { color: var(--muted); font-size: 10px; }
-.footnote { color: #7188a3; font-size: 10px; margin: 10px 0 24px; }
+.footnote { color: var(--muted); font-size: 10px; margin: 10px 0 24px; }
 .charts { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin-bottom: 15px; }
 .panel-head { display: flex; justify-content: space-between; align-items: start; gap: 10px; margin-bottom: 12px; }
 .panel-head p { font-size: 11px; color: var(--muted); margin: 7px 0; }
-.legend { color: var(--muted); font-size: 10px; white-space: nowrap; }
+.legend { color: #42566f; font-size: 11px; font-weight: 600; white-space: nowrap; }
 .legend span { margin-left: 6px; }
 canvas { display: block; width: 100%; height: 220px; }
 .chart-foot { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; }
 .bottom { display: grid; grid-template-columns: 1.6fr 1fr; gap: 14px; }
 .table-wrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; white-space: nowrap; font-variant-numeric: tabular-nums; }
-th, td { text-align: right; padding: 11px 8px; border-bottom: 1px solid #1b2e44; font-size: 11px; }
-th { color: #7894b4; font-size: 9px; }
+th, td { text-align: right; padding: 11px 8px; border-bottom: 1px solid #e8eef5; font-size: 11px; }
+th { color: #506782; background: #f7faff; font-size: 9px; }
+tbody tr:hover { background: #f6f9fd; }
 th:first-child, td:first-child { text-align: left; }
 .empty { text-align: center !important; color: var(--muted); padding: 24px; }
 .score { font-size: 35px; margin: 20px 0 8px; }
 .score small { font-size: 12px; color: var(--muted); }
-.meter { height: 6px; background: #1b2d42; border-radius: 9px; overflow: hidden; margin: 10px 0; }
+.meter { height: 7px; background: #e6edf5; border-radius: 9px; overflow: hidden; margin: 10px 0; }
 .meter span { display: block; height: 100%; width: 0; background: var(--teal); }
-.diag div { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-bottom: 1px solid #1b2e44; font-size: 11px; }
+.diag div { display: flex; justify-content: space-between; gap: 10px; padding: 11px 0; border-bottom: 1px solid #e8eef5; font-size: 11px; }
 .diag span, .muted { color: var(--muted); }
-.movement { margin-top: 17px; background: #0b2230; border: 1px solid #1a4652; border-radius: 10px; padding: 13px; }
+.movement { margin-top: 17px; background: #f0f8f8; border: 1px solid #d3eae8; border-radius: 10px; padding: 13px; }
 .movement b { display: block; margin: 8px 0; }
 .movement p { color: var(--muted); font-size: 11px; line-height: 1.5; }
-main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
+.controls { margin: 0 0 24px; }
+.control-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.control-group { min-width: 0; }
+.control-group label { display: block; color: #344a63; font-size: 11px; font-weight: 700; margin-bottom: 7px; }
+.control-group small { display: block; color: var(--muted); font-size: 11px; margin: 7px 0; }
+.control-group input, .control-group select { width: 100%; min-height: 39px; border: 1px solid #cbd7e4; border-radius: 8px; padding: 8px 10px; color: var(--text); background: #fff; }
+.control-group input::placeholder { color: #7a8aa0; }
+.control-group input:focus-visible, .control-group select:focus-visible { outline: 3px solid rgba(40,120,208,.2); border-color: var(--blue); }
+.control-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 13px; }
+.control-actions button { min-height: 38px; border: 1px solid #cbd7e4; border-radius: 8px; padding: 8px 13px; color: #344a63; background: #fff; cursor: pointer; font-weight: 600; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+.control-actions button:hover:not(:disabled) { background: #f1f6fc; border-color: #aabed4; }
+.control-actions button.primary { color: #fff; border-color: var(--blue); background: var(--blue); font-weight: 700; }
+.control-actions button.primary:hover:not(:disabled) { background: #1e68b5; border-color: #1e68b5; }
+.control-actions button.danger { border-color: #e7b9bd; color: #a93642; background: #fff8f8; }
+.control-actions button.danger:hover:not(:disabled) { background: #fcebed; }
+.control-actions button:disabled { opacity: .52; cursor: not-allowed; }
+.control-actions button:focus-visible, .report-page-heading a:focus-visible { outline: 3px solid rgba(40,120,208,.28); outline-offset: 2px; }
+.control-status { margin-top: 14px; padding: 13px; border: 1px solid #e4ebf3; border-radius: 9px; background: #f7faff; color: #4b5e75; line-height: 1.6; }
+.progress-track { height: 8px; margin: 9px 0; border-radius: 8px; background: #e3ebf4; overflow: hidden; }
+.progress-track span { display: block; height: 100%; background: var(--teal); transition: width .3s ease; }
+.feature-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; margin: 14px 0; }
+.feature-grid .panel { min-width: 0; }
+.stats-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+.stats-grid > div { padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: #f8fafd; }
+.stats-grid span, .stats-grid strong { display: block; }
+.stats-grid span { color: var(--muted); font-size: 10px; }
+.stats-grid strong { margin-top: 6px; overflow-wrap: anywhere; font-size: 13px; }
+.events-list { max-height: 220px; overflow: auto; }
+.events-list article { padding: 10px 0; border-bottom: 1px solid var(--line); color: #344a63; font-size: 11px; }
+.events-list small { display: block; color: var(--muted); margin-top: 4px; }
+.temperature-note { color: var(--muted); font-size: 11px; }
+main > footer { color: #65758b; font-size: 10px; padding: 24px 0; }
 
 @media(max-width:1200px) {
   .axes { grid-template-columns: repeat(3,minmax(0,1fr)); }
-  .charts, .bottom { grid-template-columns: 1fr; }
+  .charts, .bottom, .feature-grid { grid-template-columns: 1fr; }
+  .control-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
 }
 @media(max-width:720px) {
   .layout { grid-template-columns: 1fr; }
@@ -92,7 +130,43 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
   .status > div:nth-child(2) { border-right: 0; }
   .status > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
   .axes { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .control-grid, .stats-grid { grid-template-columns: 1fr; }
   .section { align-items: start; flex-direction: column; }
+}
+#post-session-analysis { display:none; }
+.report-mode #post-session-analysis { display:block; }
+.report-page-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px; }
+.report-page-heading a { color:#1e68b5; font-weight:700; text-decoration:none; }
+#session-overview { border:1px solid #dfe7f0; background:#fff; color:var(--text); padding:15px; }
+#session-overview > * { display:block; margin:5px 0; }
+#session-deviation-summary { border:1px solid #cfe2f5; background:#f2f8fe; color:var(--text); font-size:14px; padding:18px; }
+#session-deviation-summary > * { display:block; margin:5px 0; }
+#session-deviation-summary small { color:var(--muted); font-size:11px; }
+#session-report-summary { margin-top:12px; }
+#session-report-actions { display:flex; align-items:center; justify-content:space-between; gap:14px; margin-top:18px; }
+#session-report-actions .control-actions { margin-top:0; }
+.report-axis-heading { margin-top:16px; }
+#session-trend-history article { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+#session-trend-history article > div { min-width:0; }
+#session-trend-history a { flex:0 0 auto; color:#1e68b5; font-weight:700; text-decoration:none; }
+#session-limitations article { overflow-wrap:anywhere; }
+.report-comparison-table { table-layout:fixed; white-space:normal; }
+.report-comparison-table th, .report-comparison-table td { overflow-wrap:anywhere; padding:8px 5px; font-size:10px; }
+.report-comparison-table th { color:#405873; }
+.report-mode .layout { display:block; min-height:100vh; }
+.report-mode .sidebar, .report-mode main > *:not(#post-session-analysis) { display:none !important; }
+.report-mode main { max-width:1100px; padding:28px; }
+.report-mode #post-session-analysis { margin-top:0; }
+@media(max-width:720px) {
+  .report-page-heading { align-items:flex-start; flex-direction:column; }
+  .report-mode main { padding:16px 10px; }
+  #session-report-actions { align-items:flex-start; flex-direction:column; }
+  #session-trend-history article { align-items:flex-start; flex-direction:column; }
+  .report-comparison-table thead { display:none; }
+  .report-comparison-table tbody, .report-comparison-table tr { display:block; width:100%; }
+  .report-comparison-table tr { margin:8px 0; padding:8px; border:1px solid var(--line); border-radius:8px; }
+  .report-comparison-table td { display:flex; justify-content:space-between; gap:10px; border:0; text-align:right; }
+  .report-comparison-table td::before { content:attr(data-label); color:var(--muted); text-align:left; }
 }
 </style>
 </head>
@@ -106,7 +180,7 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
       <span id="conn">Connecting...</span>
       <small id="side-time">Waiting for sensor packet</small>
     </div>
-    <p class="note">Live MPU6050 readings only. Imported Fastrack and Google Fit records are not displayed.</p>
+    <p class="note">Live IMU payloads only. The reported device name is not independently verified. Imported Fastrack and Google Fit records are not displayed.</p>
     <footer>RESEARCH PROTOTYPE<br>NOT A MEDICAL DEVICE</footer>
   </aside>
 
@@ -119,7 +193,6 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
       </div>
       <div>
         <span class="chip" id="source">NO DATA</span>
-        <a class="button" href="/api/session/export">Export CSV ↓</a>
       </div>
     </header>
 
@@ -130,38 +203,195 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
       <div><span>SIGNAL QUALITY</span><b id="qstatus">Not available</b></div>
     </section>
 
+    <section class="panel controls" aria-labelledby="profile-heading">
+      <div class="panel-head">
+        <div><p class="label">PERSONAL BASELINE</p><h2 id="profile-heading">Profile and session controls</h2></div>
+        <span class="chip" id="profile-baseline-state">No profile selected</span>
+      </div>
+      <div class="control-grid">
+        <div class="control-group">
+          <label for="profile-select">Selected person</label>
+          <select id="profile-select"><option value="">Choose a profile</option></select>
+          <small id="profile-summary">Choose a profile to inspect its baseline and history.</small>
+          <small id="profile-units-warning"></small>
+        </div>
+        <form class="control-group" id="create-profile-form">
+          <label for="profile-name">Create a profile</label>
+          <input id="profile-name" name="display_name" maxlength="80" required placeholder="Display name">
+          <small>Optional ID: letters, numbers, underscore, hyphen.</small>
+          <input id="profile-id" name="profile_id" maxlength="40" placeholder="Optional unique profile ID">
+          <div class="control-actions"><button id="create-profile-submit" type="submit">Create profile</button></div>
+        </form>
+        <div class="control-group">
+          <label for="calibration-duration">Calibration duration</label>
+          <select id="calibration-duration">
+            <option value="120" selected>120 seconds (2 minutes)</option>
+            <option value="150">150 seconds</option>
+            <option value="180">180 seconds (maximum)</option>
+          </select>
+          <small>Only real packets with explicit matching firmware units are used.</small>
+        </div>
+      </div>
+      <div class="control-actions">
+        <button class="primary" id="start-calibration" disabled>Start Calibration / Recalibrate</button>
+        <button id="cancel-calibration" class="danger" disabled>Cancel Calibration</button>
+        <button class="primary" id="start-monitoring" disabled>Start Monitoring</button>
+        <button id="end-monitoring" class="danger" disabled>End Session</button>
+      </div>
+      <div id="profile-message" class="control-status" role="status" hidden></div>
+      <div class="control-status" aria-live="polite">
+        <strong id="calibration-state">Calibration idle</strong>
+        <div class="progress-track"><span id="calibration-progress" style="width:0%"></span></div>
+        <span id="calibration-details">Elapsed 0s · Remaining 0s · 0 accepted samples</span>
+        <span id="calibration-quality"></span>
+        <div id="monitoring-state">Monitoring is not active.</div>
+        <div id="invalid-data-state">No invalid sensor packets rejected.</div>
+        <div id="temperature-state" class="temperature-note">Sensor temperature: not reported by the current firmware.</div>
+      </div>
+      <p class="footnote">Results describe measured movement-pattern changes relative to this selected person's fixed calibration baseline. Experimental engineering estimates only; not a diagnosis or clinical severity measure.</p>
+    </section>
+
+    <section class="panel controls" id="post-session-analysis" aria-labelledby="post-session-heading">
+      <div class="report-page-heading">
+        <div><p class="label">NEUROWATCH · SESSION REPORT</p><h2 id="report-page-title">Session report</h2></div>
+        <span class="chip" id="completed-session-state">No completed session selected</span>
+      </div>
+      <div class="control-grid">
+        <div class="control-group">
+          <label for="completed-session-select">Completed session history</label>
+          <select id="completed-session-select" disabled><option value="">Select a completed session</option></select>
+        </div>
+        <div class="control-group">
+          <small id="completed-session-meta">Loading saved session details…</small>
+          <small id="session-report-message" role="status" aria-live="polite">Loading saved session analysis…</small>
+        </div>
+      </div>
+      <div class="panel-head"><div><p class="label">SESSION OVERVIEW</p><h2 id="post-session-heading">Completed session</h2></div></div>
+      <div id="session-overview" class="control-status">Loading profile, session timing, duration, and data quality…</div>
+      <article class="panel" id="session-report-summary">
+        <div class="panel-head"><div><p class="label">MEASURED DIFFERENCE FROM FIXED BASELINE</p><h2>Movement deviation summary</h2></div></div>
+        <div id="session-deviation-summary">Calculating comparison from the saved session and its baseline…</div>
+      </article>
+      <div class="panel-head"><div><p class="label">COMPARISON GRAPHS</p><h2>Baseline versus completed session</h2></div></div>
+      <div class="feature-grid">
+        <article class="panel">
+          <div class="panel-head"><div><p class="label">ACCELERATION</p><h2>Axis comparison · <span id="session-accel-unit">m/s²</span></h2><p>Solid lines are recorded session values; dashed lines and bands show saved baseline mean ± SD.</p></div></div>
+          <div class="legend"><span style="color:#2878d0">● X</span> <span style="color:#16a6a1">● Y</span> <span style="color:#8b65cc">● Z</span> <span>Dashed = baseline</span></div>
+          <canvas id="session-accel-chart" height="220"></canvas>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="label">GYROSCOPE</p><h2>Axis comparison · <span id="session-gyro-unit">deg/s</span></h2><p>Actual session samples in chronological order against the fixed saved calibration.</p></div></div>
+          <div class="legend"><span style="color:#e76f51">● X</span> <span style="color:#239b70">● Y</span> <span style="color:#d99420">● Z</span> <span>Dashed = baseline</span></div>
+          <canvas id="session-gyro-chart" height="220"></canvas>
+        </article>
+        <article class="panel">
+          <div class="panel-head"><div><p class="label">MAGNITUDE SUMMARY</p><h2>Movement magnitude comparison</h2><p>Recorded magnitudes with the saved baseline mean ± SD reference.</p></div></div>
+          <div class="legend"><span style="color:#2878d0">● Acceleration · m/s²</span> <span style="color:#e76f51">● Gyroscope · deg/s</span></div>
+          <div class="panel-head"><div><p class="label">ACCELERATION MAGNITUDE · <span id="session-accel-magnitude-unit">m/s²</span></p></div></div>
+          <canvas id="session-accel-magnitude-chart" height="180"></canvas>
+          <div class="panel-head"><div><p class="label">GYROSCOPE MAGNITUDE · <span id="session-gyro-magnitude-unit">deg/s</span></p></div></div>
+          <canvas id="session-gyro-magnitude-chart" height="180"></canvas>
+        </article>
+      </div>
+      <section class="panel">
+        <div class="panel-head"><div><p class="label">DETAILED MEASUREMENTS</p><h2>Acceleration and gyroscope statistics</h2><p>Session statistics compared with the fixed saved baseline.</p></div></div>
+        <div class="stats-grid" id="session-magnitude-statistics"></div>
+        <div class="panel-head report-axis-heading"><div><p class="label">AXIS STATISTICS</p><h2>Baseline differences by axis</h2><p>Standardized difference unavailable when baseline variability is zero or near zero.</p></div></div>
+        <div class="table-wrap">
+          <table class="report-comparison-table"><thead><tr><th>Axis</th><th>Baseline mean ± SD</th><th>Baseline min–max</th><th>Session mean ± SD</th><th>Session min–max</th><th>Absolute diff</th><th>Difference %</th><th>SD change</th><th>SD change %</th><th>Standardized</th></tr></thead><tbody id="session-deviation-rows"><tr><td class="empty" colspan="10">Loading saved session measurements…</td></tr></tbody></table>
+        </div>
+      </section>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">DETECTED EVENTS</p><h2>Movement-change events</h2></div></div>
+        <div id="session-events" class="events-list"></div>
+      </article>
+      <div id="session-limitations" class="events-list" aria-live="polite"></div>
+      <div id="session-report-actions">
+        <div class="control-actions">
+          <button class="primary" id="download-session-report" disabled>Download Session Report (PDF)</button>
+        </div>
+        <a href="/" id="return-to-dashboard">← Return to Dashboard</a>
+      </div>
+    </section>
+
     <div class="section">
       <div><p class="label">CURRENT READINGS</p><h2>Six-axis sensor values</h2></div>
-      <span class="muted">Acceleration · m/s² | Gyroscope · °/s*</span>
+      <span class="muted">Raw readings are not converted; units are taken from the packet.</span>
     </div>
 
     <section class="axes">
-      <div class="axis"><div class="axis-label">ACCELERATION X</div><strong id="ax">—</strong><small>m/s²</small></div>
-      <div class="axis"><div class="axis-label">ACCELERATION Y</div><strong id="ay">—</strong><small>m/s²</small></div>
-      <div class="axis"><div class="axis-label">ACCELERATION Z</div><strong id="az">—</strong><small>m/s²</small></div>
-      <div class="axis"><div class="axis-label">GYROSCOPE X</div><strong id="gx">—</strong><small>°/s</small></div>
-      <div class="axis"><div class="axis-label">GYROSCOPE Y</div><strong id="gy">—</strong><small>°/s</small></div>
-      <div class="axis"><div class="axis-label">GYROSCOPE Z</div><strong id="gz">—</strong><small>°/s</small></div>
+      <div class="axis"><div class="axis-label">ACCELERATION X</div><strong id="ax">—</strong><small id="unit-ax">unit unknown</small></div>
+      <div class="axis"><div class="axis-label">ACCELERATION Y</div><strong id="ay">—</strong><small id="unit-ay">unit unknown</small></div>
+      <div class="axis"><div class="axis-label">ACCELERATION Z</div><strong id="az">—</strong><small id="unit-az">unit unknown</small></div>
+      <div class="axis"><div class="axis-label">GYROSCOPE X</div><strong id="gx">—</strong><small id="unit-gx">unit unknown</small></div>
+      <div class="axis"><div class="axis-label">GYROSCOPE Y</div><strong id="gy">—</strong><small id="unit-gy">unit unknown</small></div>
+      <div class="axis"><div class="axis-label">GYROSCOPE Z</div><strong id="gz">—</strong><small id="unit-gz">unit unknown</small></div>
     </section>
 
-    <p class="footnote">*Confirm the gyroscope unit in your firmware before using it in research calculations.</p>
+    <p class="footnote">Values are displayed without conversion. Calibration and derived movement comparisons require explicit units matching the firmware declaration.</p>
 
     <section class="charts">
       <article class="panel">
         <div class="panel-head">
-          <div><p class="label">TIME SERIES</p><h2>Acceleration</h2><p>Latest samples for X, Y and Z</p></div>
-          <div class="legend"><span style="color:#5de1cb">● X</span> <span style="color:#80aaff">● Y</span> <span style="color:#c09aff">● Z</span></div>
+          <div><p class="label">LIVE SENSOR MEASUREMENTS</p><h2>Acceleration</h2><p>X, Y and Z against packet timestamps · <span id="accel-chart-unit">unit unknown</span></p></div>
+          <div class="legend"><span style="color:#2878d0">● X</span> <span style="color:#16a6a1">● Y</span> <span style="color:#8b65cc">● Z</span></div>
         </div>
         <canvas id="ac" height="220"></canvas>
         <div class="chart-foot"><span>Older ←</span><span>Newest →</span></div>
       </article>
       <article class="panel">
         <div class="panel-head">
-          <div><p class="label">TIME SERIES</p><h2>Gyroscope</h2><p>Latest samples for X, Y and Z</p></div>
-          <div class="legend"><span style="color:#5de1cb">● X</span> <span style="color:#80aaff">● Y</span> <span style="color:#c09aff">● Z</span></div>
+          <div><p class="label">LIVE SENSOR MEASUREMENTS</p><h2>Gyroscope</h2><p>X, Y and Z against packet timestamps · <span id="gyro-chart-unit">unit unknown</span></p></div>
+          <div class="legend"><span style="color:#e76f51">● X</span> <span style="color:#239b70">● Y</span> <span style="color:#d99420">● Z</span></div>
         </div>
-        <canvas id="gy" height="220"></canvas>
+        <canvas id="gyro-chart" height="220"></canvas>
         <div class="chart-foot"><span>Older ←</span><span>Newest →</span></div>
+      </article>
+    </section>
+
+    <div class="section">
+      <div><p class="label">FIXED PERSONAL REFERENCE</p><h2>Live movement features versus baseline</h2></div>
+      <span class="muted" id="feature-profile-label">Select a calibrated profile</span>
+    </div>
+    <section class="feature-grid">
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">DERIVED FEATURE · m/s²</p><h2>Acceleration magnitude</h2><p>Live window mean versus calibration reference and ±1 SD</p></div></div>
+        <canvas id="accel-feature-chart" height="220"></canvas>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">DERIVED FEATURE · deg/s</p><h2>Gyroscope magnitude</h2><p>Live window mean versus calibration reference and ±1 SD</p></div></div>
+        <canvas id="gyro-feature-chart" height="220"></canvas>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">PROFILE HISTORY</p><h2>Acceleration magnitude by session</h2><p>One actual completed-session mean per dot; m/s². Dots are not connected.</p></div></div>
+        <canvas id="accel-trend-chart" height="220"></canvas>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">PROFILE HISTORY</p><h2>Gyroscope magnitude by session</h2><p>One actual completed-session mean per dot; deg/s. Dots are not connected.</p></div></div>
+        <canvas id="gyro-trend-chart" height="220"></canvas>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">SAVED SESSION SUMMARIES</p><h2>Historical points</h2></div></div>
+        <div class="events-list" id="session-trend-history"><div class="muted">No completed sessions with recorded measurement summaries.</div></div>
+      </article>
+    </section>
+    <section class="feature-grid">
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">SAVED CALIBRATION</p><h2>Baseline statistics</h2></div></div>
+        <div class="stats-grid" id="baseline-statistics"><div class="muted">No saved baseline for this profile.</div></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">PROFILE HISTORY</p><h2>Calibration sessions</h2></div></div>
+        <div class="events-list" id="calibration-history"><div class="muted">No completed calibration sessions.</div></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">EXPERIMENTAL EVENTS</p><h2>Recent detected changes</h2></div></div>
+        <div class="events-list" id="change-events"><div class="muted">No monitoring events.</div></div>
+      </article>
+      <article class="panel">
+        <div class="panel-head"><div><p class="label">OPTIONAL SENSOR HEALTH</p><h2>Sensor temperature</h2><p>Sensor/chip temperature, not body temperature</p></div></div>
+        <canvas id="temperature-chart" height="220"></canvas>
+        <p id="temperature-chart-note" class="temperature-note">Temperature is not sent by the current firmware.</p>
       </article>
     </section>
 
@@ -203,7 +433,7 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
 (() => {
   const $ = id => document.getElementById(id);
   const keys = ['ax','ay','az','gx','gy','gz'];
-  const colors = ['#5de1cb','#80aaff','#c09aff'];
+  const colors = { ax: '#2878d0', ay: '#16a6a1', az: '#8b65cc', gx: '#e76f51', gy: '#239b70', gz: '#d99420' };
   let history = [];
   let socket;
   let reconnectTimer;
@@ -241,7 +471,7 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
       .filter(v => v !== null);
 
     if (!vals.length) {
-      ctx.fillStyle = '#91a7c1';
+      ctx.fillStyle = '#65758b';
       ctx.font = '12px Arial';
       ctx.textAlign = 'center';
       ctx.fillText('Waiting for real sensor readings...',width/2,height/2);
@@ -250,31 +480,39 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
 
     let min = Math.min(...vals);
     let max = Math.max(...vals);
+    const timeValues = history.map(p => Date.parse(p.received_at || p.timestamp)).filter(Number.isFinite);
+    const firstTime = timeValues.length ? Math.min(...timeValues) : 0;
+    const lastTime = timeValues.length ? Math.max(...timeValues) : firstTime;
     if (max-min < 0.001) { min -= 1; max += 1; }
     else { const margin = (max-min)*0.1; min -= margin; max += margin; }
 
     ctx.font = '10px Arial';
     for (let i=0; i<5; i++) {
       const y = pad.top + ch*i/4;
-      ctx.strokeStyle = '#203650';
+      ctx.strokeStyle = '#e5ebf2';
       ctx.beginPath();
       ctx.moveTo(pad.left,y);
       ctx.lineTo(width-pad.right,y);
       ctx.stroke();
-      ctx.fillStyle = '#91a7c1';
+      ctx.fillStyle = '#65758b';
       ctx.textAlign = 'right';
       ctx.fillText((max-(max-min)*i/4).toFixed(2),pad.left-6,y+3);
     }
 
     axes.forEach((axis,index) => {
       ctx.beginPath();
-      ctx.strokeStyle = colors[index];
-      ctx.lineWidth = 2;
+      ctx.strokeStyle = colors[axis];
+      ctx.lineWidth = 2.4;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
 
       history.forEach((packet,i) => {
         const value = asNumber(packet.values[axis]);
         if (value === null) return;
-        const x = pad.left + (history.length < 2 ? cw : cw*i/(history.length-1));
+        const packetTime = Date.parse(packet.received_at || packet.timestamp);
+        const x = Number.isFinite(packetTime) && lastTime > firstTime
+          ? pad.left + cw*(packetTime-firstTime)/(lastTime-firstTime)
+          : pad.left + (history.length < 2 ? cw : cw*i/(history.length-1));
         const y = pad.top + (max-value)*ch/(max-min);
         if (i === 0) ctx.moveTo(x,y);
         else ctx.lineTo(x,y);
@@ -283,11 +521,11 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
       ctx.stroke();
     });
 
-    ctx.fillStyle = '#91a7c1';
+    ctx.fillStyle = '#65758b';
     ctx.textAlign = 'left';
-    ctx.fillText('older',pad.left,height-5);
+    ctx.fillText(timeValues.length ? time(history[0].received_at || history[0].timestamp) : 'older',pad.left,height-5);
     ctx.textAlign = 'right';
-    ctx.fillText('latest',width-pad.right,height-5);
+    ctx.fillText(timeValues.length ? time(history[history.length-1].received_at || history[history.length-1].timestamp) : 'latest',width-pad.right,height-5);
   }
 
   function render(payload) {
@@ -300,22 +538,22 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
     const fresh = isFresh(latest);
 
     $('conn').textContent = fresh ? '● Sensor connected' : latest ? '● Sensor data is stale' : '● Waiting for sensor';
-    $('conn').style.color = fresh ? '#5de1cb' : latest ? '#ffc56c' : '#91a7c1';
-    $('side-time').textContent = latest ? 'Last packet · '+time(latest.timestamp) : 'Waiting for sensor packet';
+    $('conn').style.color = fresh ? '#239b70' : latest ? '#d99420' : '#65758b';
+    $('side-time').textContent = latest ? 'Last packet · '+time(latest.received_at || latest.timestamp) : 'Waiting for sensor packet';
     $('device').textContent = fresh ? 'Receiving live packets' : latest ? 'Last packet is stale' : 'Waiting for data';
     $('source').textContent = latest ? String(latest.source || 'unknown').toUpperCase() : 'NO DATA';
-    $('latest').textContent = latest ? time(latest.timestamp) : '—';
+    $('latest').textContent = latest ? time(latest.received_at || latest.timestamp) : '—';
     $('count').textContent = history.length;
 
     keys.forEach(k => $(k).textContent = latest ? fmt(latest.values[k]) : '—');
 
     drawChart('ac',['ax','ay','az']);
-    drawChart('gy',['gx','gy','gz']);
+    drawChart('gyro-chart',['gx','gy','gz']);
 
     $('caption').textContent = history.length ? history.length+' recent packets' : 'Waiting for readings';
     $('rows').innerHTML = history.length
       ? history.slice(-12).reverse().map(p =>
-          '<tr><td>'+time(p.timestamp)+'</td>'+
+          '<tr><td>'+time(p.received_at || p.timestamp)+'</td>'+
           keys.map(k=>'<td>'+fmt(p.values[k])+'</td>').join('')+'</tr>'
         ).join('')
       : '<tr><td colspan="7" class="empty">No sensor packets received yet.</td></tr>';
@@ -336,12 +574,6 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
     $('noise').textContent = metrics.noise_windows ?? '—';
     $('sat').textContent = metrics.saturation_events ?? '—';
 
-    const movement = payload.movement_intelligence || {};
-    $('mstate').textContent = movement.available
-      ? String(movement.state || 'uncertain').replaceAll('_',' ')
-      : 'Insufficient data';
-    $('msummary').textContent = movement.summary ||
-      'Collecting valid sensor windows. Experimental signal only, not a diagnosis.';
   }
 
   async function poll() {
@@ -352,7 +584,7 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
     } catch (error) {
       console.error('NeuroWatch API request failed:',error);
       $('conn').textContent = 'Backend unavailable';
-      $('conn').style.color = '#ff8585';
+      $('conn').style.color = '#d9535f';
     }
   }
 
@@ -379,7 +611,7 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
 
   window.addEventListener('resize',() => {
     drawChart('ac',['ax','ay','az']);
-    drawChart('gy',['gx','gy','gz']);
+    drawChart('gyro-chart',['gx','gy','gz']);
   });
 
   poll();
@@ -387,5 +619,6 @@ main > footer { color: #607791; font-size: 10px; padding: 24px 0; }
   connectWebSocket();
 })();
 </script>
+<script src="/static/js/profile-dashboard.js" defer></script>
 </body>
 </html>

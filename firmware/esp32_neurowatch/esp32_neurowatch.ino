@@ -17,6 +17,7 @@ const int I2C_SCL_PIN = 22;
 const uint32_t SENSOR_INTERVAL_MS = 200;
 const bool ENABLE_MAX30102 = false;
 const bool ENABLE_FSR = false;
+const float RADIANS_TO_DEGREES = 180.0f / PI;
 
 Adafruit_MPU6050 mpu;
 uint32_t sequenceNumber = 0;
@@ -54,13 +55,16 @@ void connectWiFi() {
 }
 
 String buildSensorPayload(float ax, float ay, float az, float gx, float gy, float gz) {
+  const float gxDegreesPerSecond = gx * RADIANS_TO_DEGREES;
+  const float gyDegreesPerSecond = gy * RADIANS_TO_DEGREES;
+  const float gzDegreesPerSecond = gz * RADIANS_TO_DEGREES;
   String payload = "{";
   payload += "\"sensor\":\"mpu6050\",";
   payload += "\"source\":\"real\",";
   payload += "\"timestamp\":\"" + isoTimestampNow() + "\",";
   payload += "\"sequence_number\":" + String(sequenceNumber) + ",";
   payload += "\"sensor_freshness_ms\":" + String(millis() - lastSampleTimeMs) + ",";
-  payload += "\"values\":{\"ax\":" + String(ax, 6) + ",\"ay\":" + String(ay, 6) + ",\"az\":" + String(az, 6) + ",\"gx\":" + String(gx, 6) + ",\"gy\":" + String(gy, 6) + ",\"gz\":" + String(gz, 6) + "},";
+  payload += "\"values\":{\"ax\":" + String(ax, 6) + ",\"ay\":" + String(ay, 6) + ",\"az\":" + String(az, 6) + ",\"gx\":" + String(gxDegreesPerSecond, 6) + ",\"gy\":" + String(gyDegreesPerSecond, 6) + ",\"gz\":" + String(gzDegreesPerSecond, 6) + "},";
   payload += "\"units\":{\"ax\":\"m/s^2\",\"ay\":\"m/s^2\",\"az\":\"m/s^2\",\"gx\":\"deg/s\",\"gy\":\"deg/s\",\"gz\":\"deg/s\"}";
   payload += "}";
   sequenceNumber += 1;

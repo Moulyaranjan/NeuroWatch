@@ -1,5 +1,7 @@
 
 from pathlib import Path
+import json
+from streamlit_autorefresh import st_autorefresh
 
 import pandas as pd
 import streamlit as st
@@ -42,8 +44,111 @@ st.sidebar.write("Data folder:")
 st.sidebar.code(str(BASE))
 
 if steps.empty and heart.empty and daily.empty:
-    st.error("No records found. Run convert_fit_data.py first.")
-    st.stop()
+    st.info("No historical records found yet. Live sensor data can still be displayed.")
+
+
+
+# ---- NeuroWatch live MPU6050 section ----
+
+st.divider()
+st.subheader("Live IMU Sensor")
+st.caption("Real-time acceleration and gyroscope readings from the ESP8266.")
+
+# Refresh this Streamlit page every second.
+st_autorefresh(interval=1000, key="imu_live_refresh")
+
+live_file = Path(__file__).parent / "data" / "live" / "imu_readings.jsonl"
+records = []
+
+if live_file.exists():
+    try:
+        # Read recent records from the receiver's JSON Lines file.
+        with live_file.open("r", encoding="utf-8") as f:
+            lines = f.readlines()[-300:]
+
+        for line in lines:
+            try:
+                record = json.loads(line)
+                values = record.get("values", {})
+
+                records.append({
+                    "timestamp": record.get("timestamp"),
+                    "ax": values.get("ax"),
+                    "ay": values.get("ay"),
+                    "az": values.get("az"),
+                    "gx": values.get("gx"),
+                    "gy": values.get("gy"),
+                    "gz": values.get("gz"),
+                })
+            except (json.JSONDecodeError, AttributeError):
+                continue
+
+    except OSError as exc:
+        st.warning(f"Could not read live sensor file: {exc}")
+
+if records:
+    imu = pd.DataFrame(records)
+
+    for col in ["ax", "ay", "az", "gx", "gy", "gz"]:
+        imu[col] = pd.to_numeric(imu[col], errors="coerce")
+
+    imu["timestamp"] = pd.to_datetime(
+        imu["timestamp"], utc=True, errors="coerce"
+    )
+
+    imu = imu.dropna(subset=["timestamp", "ax", "ay", "az", "gx", "gy", "gz"])
+    imu = imu.sort_values("timestamp")
+
+    if not imu.empty:
+        latest = imu.iloc[-1]
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Accel X (m/s²)", f"{latest['ax']:.2f}")
+        c2.metric("Accel Y (m/s²)", f"{latest['ay']:.2f}")
+        c3.metric("Accel Z (m/s²)", f"{latest['az']:.2f}")
+
+        c4, c5, c6 = st.columns(3)
+        c4.metric("Gyro X (°/s)", f"{latest['gx']:.2f}")
+        c5.metric("Gyro Y (°/s)", f"{latest['gy']:.2f}")
+        c6.metric("Gyro Z (°/s)", f"{latest['gz']:.2f}")
+
+        st.caption(
+            f"Latest received reading: "
+            f"{latest['timestamp'].strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        )
+
+        st.markdown("**Acceleration over time**")
+        st.line_chart(
+            imu.set_index("timestamp")[["ax", "ay", "az"]],
+            y_label="Acceleration (m/s²)",
+        )
+
+        st.markdown("**Gyroscope over time**")
+        st.line_chart(
+            imu.set_index("timestamp")[["gx", "gy", "gz"]],
+            y_label="Angular velocity (°/s)",
+        )
+
+        st.markdown("**Recent sensor records**")
+        st.dataframe(imu.tail(20), use_container_width=True)
+
+        csv_data = imu.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "Export live IMU readings as CSV",
+            data=csv_data,
+            file_name="neurowatch_imu_readings.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("Waiting for valid sensor records.")
+else:
+    st.info(
+        "Waiting for real MPU6050 data. Start the receiver and connect "
+        "the ESP8266 to Wi-Fi."
+    )
+
+# ---- End live MPU6050 section ----
+
 
 # Convert values and timestamps carefully.
 if not steps.empty and "value" in steps:
