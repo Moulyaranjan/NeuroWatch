@@ -657,14 +657,28 @@ function renderResearch(latest) {
   const stepValue = latest?.step_count;
   const activity = latest?.activity ? readableActivity(latest.activity) : 'Not classified';
   const eventCount = state.history.filter((entry) => finiteValue(entry.step_count) !== null).length;
-  el('model-output').innerHTML = latest
-    ? diagnosticRow('Step count from packet', stepValue == null ? 'Not provided' : String(stepValue)) +
-      diagnosticRow('Packets with step count', `${eventCount} of ${state.history.length} available`) +
-      diagnosticRow('Activity label from packet', activity) +
-      diagnosticRow('Derived acceleration magnitude', accMagnitude === null ? 'Unavailable' : `${formatNumber(accMagnitude, 3)} m/s²`) +
-      diagnosticRow('Model confidence', 'Not provided') +
-      diagnosticRow('Step-detection events', 'Not provided as individual events')
-    : '<div class="empty-state">Step and activity outputs will appear only when the backend receives them.</div>';
+  el('model-output').innerHTML =
+  diagnosticRow(
+    'ML model status',
+    state.mlPrediction?.state ?? 'Waiting for data'
+  ) +
+  diagnosticRow(
+    'Movement-pattern prediction',
+    state.mlPrediction?.output?.class ?? 'Awaiting valid sensor data'
+  ) +
+  diagnosticRow(
+    'Model message',
+    state.mlPrediction?.message ?? 'Waiting for live sensor data.'
+  ) +
+  diagnosticRow('Model confidence', 'Not provided') +
+  diagnosticRow(
+    'Step count from packet',
+    latest?.step_count == null ? 'Not provided' : String(latest.step_count)
+  ) +
+  diagnosticRow(
+    'Activity label from packet',
+    latest?.activity ?? 'Not classified'
+  );
 
   const baseline = rollingBaseline();
   el('research-baseline').innerHTML = AXES.map((key) => {
@@ -807,6 +821,7 @@ function renderState(payload) {
   state.signalQuality = payload.signal_quality && typeof payload.signal_quality === 'object' ? payload.signal_quality : null;
   state.movementIntelligence = payload.movement_intelligence && typeof payload.movement_intelligence === 'object' ? payload.movement_intelligence : null;
   state.researchMetrics = payload.research_metrics && typeof payload.research_metrics === 'object' ? payload.research_metrics : null;
+  state.mlPrediction = payload.ml_prediction ?? null;
   const latest = getLatest();
 
   const fresh = isFresh(latest);

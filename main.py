@@ -255,6 +255,15 @@ class SessionStore:
 store = SessionStore()
 profile_store = ProfileStore(PROFILE_FILE)
 ml_service = MovementModelService()
+
+# Live rolling window used by the exploratory movement classifier.
+_ml_samples = deque(maxlen=400)
+_ml_prediction = {
+    "state": "waiting_for_data",
+    "output": None,
+    "message": "Waiting for valid live IMU samples.",
+}
+
 _sensor_diagnostics_lock = Lock()
 _sensor_diagnostics: Dict[str, Any] = {
     "invalid_packet_count": 0,
