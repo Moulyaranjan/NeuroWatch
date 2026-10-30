@@ -20,7 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from starlette.requests import Request
-from movement import AXES, ProfileStore
+from movement import AXES, ProfileStore, combine_movement_outputs
 from neuroml.service import MovementModelService
 
 from reportlab.lib import colors
@@ -258,11 +258,23 @@ ml_service = MovementModelService()
 
 # Live rolling window used by the exploratory movement classifier.
 _ml_samples = deque(maxlen=400)
+_ml_context: Optional[Dict[str, str]] = None
 _ml_prediction = {
     "state": "waiting_for_data",
     "output": None,
     "message": "Waiting for valid live IMU samples.",
 }
+
+
+def _reset_ml_context() -> None:
+    global _ml_context, _ml_prediction
+    _ml_context = None
+    _ml_samples.clear()
+    _ml_prediction = {
+        "state": "waiting_for_data",
+        "output": None,
+        "message": "Waiting for valid samples in the active monitoring session.",
+    }
 
 _sensor_diagnostics_lock = Lock()
 _sensor_diagnostics: Dict[str, Any] = {
@@ -1145,6 +1157,23 @@ def build_dashboard_payload(profile_id: Optional[str] = None) -> Dict[str, Any]:
         "summary": "Legacy field retained for compatibility; use profile_state.comparison for fixed-baseline results.",
     }
     research_metrics = evaluate_research_metrics(history)
+    monitoring = profile_state.get("monitoring", {})
+    ml_prediction = dict(_ml_prediction)
+    expected_context = {
+        "profile_id": monitoring.get("profile_id"),
+        "session_id": monitoring.get("session_id"),
+    }
+    if (
+        monitoring.get("state") == "idle"
+        or _ml_context != expected_context
+        or not expected_context["session_id"]
+    ):
+        ml_prediction = {
+            "state": "waiting_for_data",
+            "output": None,
+            "message": "No prediction is available for the selected active monitoring session.",
+        }
+    combined_interpretation = combine_movement_outputs(comparison, ml_prediction)
     alerts = (
         [comparison.get("interpretation", "Experimental movement comparison available.")]
         if comparison_available
@@ -1206,6 +1235,8 @@ def build_dashboard_payload(profile_id: Optional[str] = None) -> Dict[str, Any]:
         "research_metrics": research_metrics,
         "profile_state": profile_state,
         "ml_analysis_status": ml_service.status(),
+        "ml_prediction": ml_prediction,
+        "combined_interpretation": combined_interpretation,
         "sensor_temperature": {
             "state": temperature_state,
             "temperature_c": latest_temperature,
@@ -1449,6 +1480,7 @@ async def start_monitoring(profile_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _reset_ml_context()
     await manager.broadcast(build_dashboard_payload(profile_id))
     return state
 
@@ -1459,6 +1491,7 @@ async def end_monitoring() -> Dict[str, Any]:
         report = profile_store.end_monitoring(ml_service.analyze)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    _reset_ml_context()
     await manager.broadcast(build_dashboard_payload(report["profile"]["profile_id"]))
     return report
 
@@ -1482,6 +1515,7 @@ async def profile_trends(profile_id: str) -> Dict[str, Any]:
 
 @app.post("/api/sensor/ingest")
 async def ingest_sensor(payload: SensorPayload) -> Dict[str, Any]:
+    global _ml_context, _ml_prediction
     if payload.source == "simulated" and not SIMULATOR_ENABLED:
         _record_invalid_sensor_packet("Simulation mode is disabled.")
         raise HTTPException(status_code=403, detail="Simulation mode is disabled by default.")
@@ -1530,10 +1564,11 @@ async def ingest_sensor(payload: SensorPayload) -> Dict[str, Any]:
         and -5 <= sensor_age_seconds <= 3
         and (payload.sensor_freshness_ms is None or payload.sensor_freshness_ms <= 3000)
     )
-    eligible = payload.source == "real" and axes_valid and units_valid and freshness_valid
+    source_valid = payload.source == "real" or (payload.source == "simulated" and SIMULATOR_ENABLED)
+    eligible = source_valid and axes_valid and units_valid and freshness_valid
     reason = None
-    if payload.source != "real":
-        reason = "Calibration requires source='real'."
+    if not source_valid:
+        reason = "Calibration requires real packets, or explicitly enabled simulated test packets."
     elif not axes_valid:
         reason = "Calibration requires finite values for all six IMU axes."
     elif not units_valid:
@@ -1541,7 +1576,21 @@ async def ingest_sensor(payload: SensorPayload) -> Dict[str, Any]:
     elif not freshness_valid:
         reason = "Calibration requires a current sensor timestamp and freshness metadata."
     received_at = datetime.fromisoformat(record["received_at"].replace("Z", "+00:00"))
-    profile_store.record_packet(record, received_at, time.monotonic(), eligible, reason)
+    context = profile_store.packet_context()
+    accepted_sample = profile_store.record_packet(record, received_at, time.monotonic(), eligible, reason)
+
+    # Only the sample accepted by the profile store enters the current session's ML path.
+    if context and context.get("context_type") == "monitoring":
+        context_key = {
+            "profile_id": context["profile_id"],
+            "session_id": context["context_id"],
+        }
+        if _ml_context != context_key:
+            _reset_ml_context()
+            _ml_context = context_key
+        if accepted_sample is not None:
+            _ml_samples.append(accepted_sample)
+            _ml_prediction = ml_service.analyze(list(_ml_samples))
 
     dashboard_payload = build_dashboard_payload()
     await manager.broadcast(dashboard_payload)

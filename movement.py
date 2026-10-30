@@ -139,6 +139,49 @@ def _movement_feature_comparisons(
     }
 
 
+def combine_movement_outputs(
+    baseline_comparison: Optional[Dict[str, Any]],
+    model_analysis: Optional[Dict[str, Any]],
+) -> Dict[str, Any]:
+    """Describe agreement between personal change and the model's class family."""
+    baseline_state = (baseline_comparison or {}).get("state")
+    baseline_available = baseline_state in {"normal", "review", "marked deviation"}
+    output = (model_analysis or {}).get("output") or {}
+    model_class = output.get("class")
+    ml_available = (model_analysis or {}).get("state") == "available" and isinstance(model_class, str)
+
+    if baseline_available and ml_available:
+        baseline_normal = baseline_state == "normal"
+        normalized_class = model_class.strip().casefold()
+        model_normal = normalized_class in {"healthy", "control", "normal"}
+        state = "agreement" if baseline_normal == model_normal else "disagreement"
+        message = (
+            "The personal baseline comparison and model class point to the same broad pattern. "
+            "The model class is exploratory and is not a diagnosis."
+            if state == "agreement"
+            else "The personal baseline comparison and model class differ; review their separate outputs. "
+            "The model class is exploratory and is not a diagnosis."
+        )
+    elif baseline_available:
+        state = "baseline-only"
+        message = "A personal baseline comparison is available; no model class is available."
+    elif ml_available:
+        state = "ML-only"
+        message = "A model class is available; a personal baseline comparison is unavailable."
+    else:
+        state = "insufficient-data"
+        message = "Neither a usable personal baseline comparison nor a model class is available."
+
+    return {
+        "state": state,
+        "baseline_state": baseline_state,
+        "model_class": model_class if ml_available else None,
+        "baseline_available": baseline_available,
+        "ml_available": ml_available,
+        "message": message,
+    }
+
+
 def _longitudinal_change(
     profile: Dict[str, Any],
     session: Dict[str, Any],
@@ -344,6 +387,8 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
         "data_quality": movement_summary["status"],
         "message": "Movement classification is unavailable until a compatible trained model is installed.",
     })
+    baseline_comparison = session.get("latest_comparison")
+    combined_interpretation = combine_movement_outputs(baseline_comparison, model_analysis)
     limitations = []
     limitations.append(
         "Packet counts include packets routed to this active monitoring session; malformed or stale requests rejected before routing are not included."
@@ -469,6 +514,8 @@ def _session_analysis(session: Dict[str, Any], profile: Dict[str, Any]) -> Dict[
         "effective_sample_rate_hz": sample_rate,
         "movement_feature_summary": movement_summary,
         "movement_feature_comparisons": movement_comparisons,
+        "baseline_comparison": baseline_comparison,
+        "combined_interpretation": combined_interpretation,
         "longitudinal_change": longitudinal_change,
         "model_analysis": model_analysis,
         "timestamp_gap_count": len(large_gaps),
@@ -1052,12 +1099,14 @@ class ProfileStore:
                 "events": session["events"],
                 "samples": session["samples"],
                 "baseline": _copy(session["baseline"]),
+                "latest_comparison": _copy(session.get("latest_comparison")),
                 "units": {"acceleration": "m/s^2", "gyroscope": "deg/s"},
             }
             if model_analyzer is not None:
                 record["model_analysis"] = model_analyzer(record["samples"])
             profile = self.profiles[session["profile_id"]]
             report = _session_analysis(record, profile)
+            record["combined_interpretation"] = _copy(report["combined_interpretation"])
             record["analysis"] = {key: value for key, value in report.items() if key != "samples"}
             profile["sessions"].append(record)
             self.monitoring = None
@@ -1074,6 +1123,7 @@ class ProfileStore:
                     "duration_seconds", "sample_count", "rejected_packet_count",
                     "baseline_calibration_id", "features", "units",
                     "movement_feature_summary", "model_analysis",
+                    "combined_interpretation",
                 }
             })
             return _copy(report)
@@ -1190,7 +1240,7 @@ class ProfileStore:
         received_monotonic: float,
         eligible: bool,
         invalid_reason: Optional[str] = None,
-    ) -> None:
+    ) -> Optional[Dict[str, Any]]:
         with self._lock:
             if self.calibration and self.calibration["state"] in {"collecting", "paused_stale"}:
                 self._refresh_calibration()
@@ -1199,32 +1249,33 @@ class ProfileStore:
                     if not eligible:
                         calibration["rejected_packets"] += 1
                         calibration["last_invalid_reason"] = invalid_reason or "Packet did not meet calibration requirements."
-                        return
+                        return None
                     if calibration["sensor_name"] is not None and event.get("sensor") != calibration["sensor_name"]:
                         calibration["rejected_packets"] += 1
                         calibration["last_invalid_reason"] = "Packet came from a different sensor than this calibration."
-                        return
+                        return None
                     sample = self._sample(event, received_at)
                     calibration["sensor_name"] = event.get("sensor")
                     calibration["samples"].append(sample)
                     calibration["last_packet_monotonic"] = received_monotonic
                     calibration["last_invalid_reason"] = None
                     calibration["state"] = "collecting"
-                    return
+                    return _copy(sample)
 
             session = self.monitoring
             if session is None:
-                return
+                return None
             if not eligible:
                 session["rejected_packets"] += 1
-                return
+                return None
             if event.get("sensor") != session["sensor_name"]:
                 session["rejected_packets"] += 1
-                return
+                return None
             sample = self._sample(event, received_at)
             session["samples"].append(sample)
             session["last_packet_monotonic"] = received_monotonic
             self._update_comparison(session, sample)
+            return _copy(sample)
 
     @staticmethod
     def _sample(event: Dict[str, Any], received_at: datetime) -> Dict[str, Any]:
