@@ -1,0 +1,936 @@
+{
+  "training_status": "trained",
+  "model_name": "NeuroWatch Random Forest movement-pattern classifier",
+  "model_version": "1.0.0",
+  "task": "movement-pattern classification from labeled sensor windows; not clinical diagnosis",
+  "feature_version": "movement-features-v1",
+  "feature_names": [
+    "ax_mean",
+    "ax_variance",
+    "ax_rms",
+    "ax_peak_to_peak",
+    "ax_dominant_frequency_hz",
+    "ax_spectral_entropy",
+    "ax_tremor_band_power",
+    "ay_mean",
+    "ay_variance",
+    "ay_rms",
+    "ay_peak_to_peak",
+    "ay_dominant_frequency_hz",
+    "ay_spectral_entropy",
+    "ay_tremor_band_power",
+    "az_mean",
+    "az_variance",
+    "az_rms",
+    "az_peak_to_peak",
+    "az_dominant_frequency_hz",
+    "az_spectral_entropy",
+    "az_tremor_band_power",
+    "gx_mean",
+    "gx_variance",
+    "gx_rms",
+    "gx_peak_to_peak",
+    "gx_dominant_frequency_hz",
+    "gx_spectral_entropy",
+    "gx_tremor_band_power",
+    "gy_mean",
+    "gy_variance",
+    "gy_rms",
+    "gy_peak_to_peak",
+    "gy_dominant_frequency_hz",
+    "gy_spectral_entropy",
+    "gy_tremor_band_power",
+    "gz_mean",
+    "gz_variance",
+    "gz_rms",
+    "gz_peak_to_peak",
+    "gz_dominant_frequency_hz",
+    "gz_spectral_entropy",
+    "gz_tremor_band_power",
+    "acceleration_magnitude_mean",
+    "acceleration_magnitude_variance",
+    "acceleration_magnitude_rms",
+    "acceleration_magnitude_peak_to_peak",
+    "acceleration_magnitude_dominant_frequency_hz",
+    "acceleration_magnitude_spectral_entropy",
+    "acceleration_magnitude_tremor_band_power",
+    "gyroscope_magnitude_mean",
+    "gyroscope_magnitude_variance",
+    "gyroscope_magnitude_rms",
+    "gyroscope_magnitude_peak_to_peak",
+    "gyroscope_magnitude_dominant_frequency_hz",
+    "gyroscope_magnitude_spectral_entropy",
+    "gyroscope_magnitude_tremor_band_power"
+  ],
+  "feature_definitions": {
+    "ax_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "ax_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(m/s^2)^2"
+    },
+    "ax_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "ax_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "ax_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "ax_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "ax_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(m/s^2)^2"
+    },
+    "ay_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "ay_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(m/s^2)^2"
+    },
+    "ay_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "ay_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "ay_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "ay_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "ay_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(m/s^2)^2"
+    },
+    "az_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "az_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(m/s^2)^2"
+    },
+    "az_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "az_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "az_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "az_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "az_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(m/s^2)^2"
+    },
+    "gx_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gx_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(deg/s)^2"
+    },
+    "gx_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gx_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gx_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "gx_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "gx_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(deg/s)^2"
+    },
+    "gy_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gy_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(deg/s)^2"
+    },
+    "gy_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gy_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gy_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "gy_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "gy_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(deg/s)^2"
+    },
+    "gz_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gz_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(deg/s)^2"
+    },
+    "gz_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gz_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gz_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "gz_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "gz_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(deg/s)^2"
+    },
+    "acceleration_magnitude_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "acceleration_magnitude_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(m/s^2)^2"
+    },
+    "acceleration_magnitude_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "acceleration_magnitude_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "m/s^2"
+    },
+    "acceleration_magnitude_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "acceleration_magnitude_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "acceleration_magnitude_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(m/s^2)^2"
+    },
+    "gyroscope_magnitude_mean": {
+      "description": "Arithmetic mean of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gyroscope_magnitude_variance": {
+      "description": "Population variance of the raw axis or magnitude in the window.",
+      "unit": "(deg/s)^2"
+    },
+    "gyroscope_magnitude_rms": {
+      "description": "Root-mean-square of the demeaned axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gyroscope_magnitude_peak_to_peak": {
+      "description": "Peak-to-peak range of the raw axis or magnitude in the window.",
+      "unit": "deg/s"
+    },
+    "gyroscope_magnitude_dominant_frequency_hz": {
+      "description": "Largest spectral peak from 0.5 to 10 Hz; zero means no measurable power in that band.",
+      "unit": "Hz"
+    },
+    "gyroscope_magnitude_spectral_entropy": {
+      "description": "Normalized Shannon entropy of spectral power from 0.5 to 10 Hz.",
+      "unit": "unitless"
+    },
+    "gyroscope_magnitude_tremor_band_power": {
+      "description": "Sum of spectral power from 3 to 10 Hz; unavailable below 25 Hz sampling.",
+      "unit": "(deg/s)^2"
+    }
+  },
+  "sampling_rate_hz": 100.0,
+  "window_seconds": 4.0,
+  "window_overlap": 0.5,
+  "sensor_axes": [
+    "ax",
+    "ay",
+    "az",
+    "gx",
+    "gy",
+    "gz"
+  ],
+  "units": {
+    "acceleration": "m/s^2",
+    "gyroscope": "deg/s"
+  },
+  "classes": [
+    "Healthy",
+    "OtherMovementDisorders",
+    "Parkinsons"
+  ],
+  "dataset_provenance": {
+    "name": "PADS Parkinson's Disease Smartwatch v1.0.0",
+    "source": "https://physionet.org/content/parkinsons-disease-smartwatch/1.0.0/",
+    "license": "CC BY-NC-SA 4.0",
+    "input_file_name": "pads_neuromotion.csv",
+    "participant_count": 469,
+    "window_count": 7043,
+    "class_counts": {
+      "Healthy": 1228,
+      "OtherMovementDisorders": 1682,
+      "Parkinsons": 4133
+    }
+  },
+  "evaluation": {
+    "split_strategy": "GroupShuffleSplit by participant_id",
+    "random_state": 42,
+    "train_participants": [
+      "002",
+      "003",
+      "004",
+      "005",
+      "006",
+      "007",
+      "008",
+      "009",
+      "011",
+      "013",
+      "014",
+      "015",
+      "017",
+      "021",
+      "022",
+      "024",
+      "027",
+      "028",
+      "029",
+      "030",
+      "033",
+      "035",
+      "036",
+      "037",
+      "038",
+      "039",
+      "041",
+      "042",
+      "044",
+      "045",
+      "046",
+      "048",
+      "049",
+      "050",
+      "051",
+      "052",
+      "053",
+      "054",
+      "055",
+      "059",
+      "060",
+      "061",
+      "062",
+      "063",
+      "065",
+      "066",
+      "068",
+      "069",
+      "070",
+      "072",
+      "075",
+      "081",
+      "082",
+      "084",
+      "086",
+      "088",
+      "089",
+      "090",
+      "092",
+      "093",
+      "095",
+      "096",
+      "097",
+      "098",
+      "099",
+      "100",
+      "101",
+      "103",
+      "104",
+      "105",
+      "106",
+      "107",
+      "108",
+      "109",
+      "110",
+      "111",
+      "112",
+      "113",
+      "115",
+      "116",
+      "117",
+      "119",
+      "120",
+      "121",
+      "122",
+      "123",
+      "124",
+      "126",
+      "128",
+      "129",
+      "130",
+      "131",
+      "134",
+      "135",
+      "136",
+      "137",
+      "139",
+      "140",
+      "142",
+      "143",
+      "144",
+      "145",
+      "146",
+      "147",
+      "148",
+      "150",
+      "151",
+      "152",
+      "153",
+      "157",
+      "159",
+      "160",
+      "161",
+      "162",
+      "163",
+      "164",
+      "165",
+      "166",
+      "167",
+      "168",
+      "169",
+      "170",
+      "171",
+      "172",
+      "173",
+      "175",
+      "178",
+      "179",
+      "180",
+      "183",
+      "184",
+      "185",
+      "186",
+      "187",
+      "188",
+      "189",
+      "190",
+      "191",
+      "192",
+      "193",
+      "194",
+      "195",
+      "196",
+      "198",
+      "199",
+      "201",
+      "202",
+      "203",
+      "205",
+      "206",
+      "207",
+      "208",
+      "210",
+      "212",
+      "213",
+      "214",
+      "215",
+      "216",
+      "217",
+      "218",
+      "220",
+      "222",
+      "223",
+      "224",
+      "225",
+      "226",
+      "227",
+      "228",
+      "229",
+      "231",
+      "233",
+      "234",
+      "235",
+      "236",
+      "237",
+      "238",
+      "240",
+      "241",
+      "242",
+      "243",
+      "244",
+      "245",
+      "246",
+      "247",
+      "250",
+      "251",
+      "252",
+      "253",
+      "254",
+      "255",
+      "256",
+      "257",
+      "258",
+      "259",
+      "260",
+      "261",
+      "262",
+      "264",
+      "265",
+      "266",
+      "267",
+      "268",
+      "269",
+      "270",
+      "271",
+      "273",
+      "274",
+      "275",
+      "276",
+      "277",
+      "279",
+      "280",
+      "281",
+      "282",
+      "283",
+      "284",
+      "286",
+      "287",
+      "288",
+      "289",
+      "290",
+      "292",
+      "293",
+      "294",
+      "295",
+      "296",
+      "300",
+      "301",
+      "304",
+      "307",
+      "309",
+      "310",
+      "311",
+      "314",
+      "315",
+      "316",
+      "317",
+      "318",
+      "319",
+      "320",
+      "321",
+      "323",
+      "325",
+      "326",
+      "327",
+      "328",
+      "329",
+      "330",
+      "331",
+      "333",
+      "334",
+      "335",
+      "336",
+      "337",
+      "338",
+      "339",
+      "340",
+      "341",
+      "342",
+      "343",
+      "344",
+      "345",
+      "346",
+      "347",
+      "348",
+      "349",
+      "350",
+      "351",
+      "352",
+      "354",
+      "355",
+      "356",
+      "357",
+      "358",
+      "359",
+      "360",
+      "361",
+      "362",
+      "364",
+      "366",
+      "367",
+      "368",
+      "369",
+      "370",
+      "371",
+      "373",
+      "374",
+      "375",
+      "376",
+      "377",
+      "378",
+      "379",
+      "380",
+      "381",
+      "382",
+      "384",
+      "386",
+      "388",
+      "389",
+      "390",
+      "391",
+      "392",
+      "393",
+      "396",
+      "397",
+      "398",
+      "400",
+      "402",
+      "404",
+      "405",
+      "406",
+      "408",
+      "410",
+      "411",
+      "412",
+      "414",
+      "417",
+      "418",
+      "420",
+      "421",
+      "422",
+      "423",
+      "424",
+      "425",
+      "428",
+      "429",
+      "431",
+      "432",
+      "433",
+      "434",
+      "436",
+      "437",
+      "438",
+      "439",
+      "440",
+      "442",
+      "445",
+      "448",
+      "450",
+      "452",
+      "453",
+      "454",
+      "456",
+      "458",
+      "459",
+      "462",
+      "463",
+      "466",
+      "467",
+      "468",
+      "469"
+    ],
+    "test_participants": [
+      "001",
+      "010",
+      "012",
+      "016",
+      "018",
+      "019",
+      "020",
+      "023",
+      "025",
+      "026",
+      "031",
+      "032",
+      "034",
+      "040",
+      "043",
+      "047",
+      "056",
+      "057",
+      "058",
+      "064",
+      "067",
+      "071",
+      "073",
+      "074",
+      "076",
+      "077",
+      "078",
+      "079",
+      "080",
+      "083",
+      "085",
+      "087",
+      "091",
+      "094",
+      "102",
+      "114",
+      "118",
+      "125",
+      "127",
+      "132",
+      "133",
+      "138",
+      "141",
+      "149",
+      "154",
+      "155",
+      "156",
+      "158",
+      "174",
+      "176",
+      "177",
+      "181",
+      "182",
+      "197",
+      "200",
+      "204",
+      "209",
+      "211",
+      "219",
+      "221",
+      "230",
+      "232",
+      "239",
+      "248",
+      "249",
+      "263",
+      "272",
+      "278",
+      "285",
+      "291",
+      "297",
+      "298",
+      "299",
+      "302",
+      "303",
+      "305",
+      "306",
+      "308",
+      "312",
+      "313",
+      "322",
+      "324",
+      "332",
+      "353",
+      "363",
+      "365",
+      "372",
+      "383",
+      "385",
+      "387",
+      "394",
+      "395",
+      "399",
+      "401",
+      "403",
+      "407",
+      "409",
+      "413",
+      "415",
+      "416",
+      "419",
+      "426",
+      "427",
+      "430",
+      "435",
+      "441",
+      "443",
+      "444",
+      "446",
+      "447",
+      "449",
+      "451",
+      "455",
+      "457",
+      "460",
+      "461",
+      "464",
+      "465"
+    ],
+    "train_window_count": 5282,
+    "test_window_count": 1761,
+    "models": {
+      "random_forest": {
+        "accuracy": 0.5956842703009654,
+        "balanced_accuracy": 0.3635994773521276,
+        "macro_f1": 0.32946307441260153,
+        "class_metrics": {
+          "Healthy": {
+            "precision": 0.2826086956521739,
+            "recall": 0.038011695906432746,
+            "f1-score": 0.06701030927835051,
+            "support": 342.0
+          },
+          "OtherMovementDisorders": {
+            "precision": 0.5194805194805194,
+            "recall": 0.11049723756906077,
+            "f1-score": 0.18223234624145787,
+            "support": 362.0
+          },
+          "Parkinsons": {
+            "precision": 0.608058608058608,
+            "recall": 0.9422894985808893,
+            "f1-score": 0.7391465677179963,
+            "support": 1057.0
+          },
+          "accuracy": 0.5956842703009654,
+          "macro avg": {
+            "precision": 0.47004927439710037,
+            "recall": 0.3635994773521276,
+            "f1-score": 0.32946307441260153,
+            "support": 1761.0
+          },
+          "weighted avg": {
+            "precision": 0.5266451281561273,
+            "recall": 0.5956842703009654,
+            "f1-score": 0.49413035615589196,
+            "support": 1761.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            13,
+            5,
+            324
+          ],
+          [
+            4,
+            40,
+            318
+          ],
+          [
+            29,
+            32,
+            996
+          ]
+        ],
+        "class_labels": [
+          "Healthy",
+          "OtherMovementDisorders",
+          "Parkinsons"
+        ]
+      },
+      "svm": {
+        "accuracy": 0.38841567291311757,
+        "balanced_accuracy": 0.394654989242974,
+        "macro_f1": 0.35971638104080844,
+        "class_metrics": {
+          "Healthy": {
+            "precision": 0.2503576537911302,
+            "recall": 0.5116959064327485,
+            "f1-score": 0.33621517771373677,
+            "support": 342.0
+          },
+          "OtherMovementDisorders": {
+            "precision": 0.23648648648648649,
+            "recall": 0.2900552486187845,
+            "f1-score": 0.26054590570719605,
+            "support": 362.0
+          },
+          "Parkinsons": {
+            "precision": 0.6537216828478964,
+            "recall": 0.38221381267738885,
+            "f1-score": 0.4823880597014925,
+            "support": 1057.0
+          },
+          "accuracy": 0.38841567291311757,
+          "macro avg": {
+            "precision": 0.3801886077085044,
+            "recall": 0.394654989242974,
+            "f1-score": 0.35971638104080844,
+            "support": 1761.0
+          },
+          "weighted avg": {
+            "precision": 0.489616266027769,
+            "recall": 0.38841567291311757,
+            "f1-score": 0.4083971537470644,
+            "support": 1761.0
+          }
+        },
+        "confusion_matrix": [
+          [
+            175,
+            94,
+            73
+          ],
+          [
+            116,
+            105,
+            141
+          ],
+          [
+            408,
+            245,
+            404
+          ]
+        ],
+        "class_labels": [
+          "Healthy",
+          "OtherMovementDisorders",
+          "Parkinsons"
+        ]
+      }
+    }
+  },
+  "known_limitations": [
+    "Participant-independent evaluation is not external clinical validation.",
+    "Model outputs are dataset label classes only and are not diagnosis, severity, or disease risk.",
+    "No probability calibration is applied; inference exposes no confidence score.",
+    "Performance may not transfer across sensor placement, device, units, sampling rate, or task protocol."
+  ],
+  "software_versions": {
+    "scikit_learn": "1.9.1",
+    "numpy": "2.5.3"
+  },
+  "trained_at_utc": "2026-10-29T17:32:22.821410+00:00"
+}
